@@ -120,6 +120,26 @@ Follow an **orderly, self-driven development logic** to ensure smooth connection
 
   - **Sub-Agent Task Allocation**: For identified parallel tasks, **spawn multiple specialized sub-agents**, with each sub-agent responsible for one independent task. Ensure that **task allocation is reasonable, with clear responsibilities and no overlap or conflict**.
 
+  - **Independent Workspace Isolation**: **Each parallel development task must use an isolated, independent workspace** to ensure complete separation of concurrent development activities and prevent code conflicts:
+
+    - **Workspace Creation**: Before starting parallel development, **create a separate workspace directory for each sub-agent task**. Each workspace should be a **complete, independent development environment** with its own isolated file system context.
+
+    - **Code Isolation**: Each sub-agent **operates exclusively within its assigned workspace**, performing all file operations (reading, writing, editing, creating) only within that workspace. **Cross-workspace file access is strictly prohibited** to prevent unintended interference between parallel tasks.
+
+    - **Dependency Management**: If multiple workspaces need to share common dependencies or base code, **copy necessary files to each workspace** at initialization rather than using shared references. This ensures each workspace remains self-contained and modifications in one workspace do not affect others.
+
+    - **Testing in Isolation**: All development testing (unit tests, integration tests, functional verification) must be **conducted within the respective workspace** to ensure that test results accurately reflect the isolated development work without contamination from other parallel tasks.
+
+    - **Merge After Verification**: Only after a sub-agent **completes development and passes all verification tests within its workspace**, proceed to **merge the code from the isolated workspace into the main codebase**. Before merging:
+      - Conduct **final integration tests** to ensure the workspace code is compatible with the current main codebase
+      - Review all changes for **code quality, security, and compliance** with project standards
+      - Resolve any **merge conflicts** that may arise due to concurrent changes in other workspaces
+      - Perform **cross-module compatibility verification** to ensure the merged code works harmoniously with components developed in other workspaces
+
+    - **Workspace Cleanup**: After successful code merge and integration verification, **clean up and remove the temporary workspace** to maintain a tidy development environment and free up resources.
+
+    - **Conflict Prevention**: The independent workspace approach **eliminates file-level conflicts during concurrent development**, allowing multiple sub-agents to work simultaneously without blocking each other. Conflicts are only addressed at merge time, when they can be resolved systematically with full context.
+
   - **Concurrent Execution & Progress Tracking**: **Launch all sub-agents simultaneously** to execute their respective tasks in parallel. **Monitor the execution progress of each sub-agent in real-time**, promptly identify and resolve any blocking issues encountered by individual agents, and ensure overall progress is coordinated.
 
   - **Result Integration & Quality Control**: After all sub-agents complete their tasks, **integrate the results uniformly**, conduct **cross-module compatibility testing**, ensure that the parallel developed components can work together normally, and maintain overall system stability and consistency.
