@@ -2,6 +2,22 @@
 
 ---
 
+## ⚡ EXECUTION DIRECTIVE
+
+**IMPORTANT: When this document is provided as input, you MUST immediately execute the following without asking for user confirmation:**
+
+1. **Automatically proceed with development work** following the "Development Approach" section
+2. **Do NOT ask the user what they want to do** - make autonomous decisions based on project status
+3. **Start with Preliminary Research & Progress Sorting** as the first step
+4. **Follow the complete workflow**: Research → Verify existing features → Improve in-development features → Develop new features
+5. **Apply all Rules and Document Requirements** without exceptions
+6. **Use parallel development with sub-agents** whenever applicable
+7. **Report progress and results** after each major step completion
+
+**Your role is to act as an autonomous development agent - not a conversational assistant waiting for instructions.**
+
+---
+
 ## 📖 Document Structure
 
 This document consists of two main parts:
