@@ -1,4 +1,5 @@
-# Alpha AI Assistant
+# Alpha: an AI-defined and implemented robot
+build by `cat make_alpha.md | claude --dangerously-skip-permissions`
 
 English | [简体中文](README.zh.md)
 
@@ -15,6 +16,9 @@ Alpha is your intelligent personal assistant powered by advanced AI models. It c
 - 🌐 **Search the web** - Find information online
 - ⏰ **Handle dates/times** - Work with dates, times, and timezones
 - 🤖 **Multi-AI support** - Choose from DeepSeek, Claude, or GPT-4
+- 🧠 **Intelligent Model Selection** - Automatic task analysis and optimal model routing
+- 🎯 **Dynamic Skills** - Expand capabilities with auto-installable skills
+- ⚡ **Builtin Skills** - 3 preinstalled skills ready to use (text, JSON, data processing)
 
 ## Quick Start
 
@@ -155,7 +159,70 @@ Scheduling formats:
 
 ## Release Notes
 
-### v0.2.0 (Current) - Task Scheduling & Enhanced Tools
+### v0.4.0 (Current) - Intelligent Multi-Model Selection
+**Release Date**: 2026-01-29
+
+**New Features:**
+- ✨ **Intelligent Model Selection** - Automatic task analysis and optimal model routing
+  - Support for deepseek-chat, deepseek-coder, deepseek-reasoner
+  - Task difficulty analysis (simple, medium, complex, expert)
+  - Automatic model matching based on task characteristics
+  - Optimized for cost and performance
+- 📊 **Task Analyzer** - Advanced task characteristic detection
+  - Coding task detection
+  - Reasoning requirement analysis
+  - Expert-level topic identification
+- 🎯 **Smart Model Routing** - Priority-based model selection
+  - deepseek-reasoner for complex reasoning and expert-level tasks
+  - deepseek-coder for programming tasks
+  - deepseek-chat for general conversations
+
+**Documentation:**
+- [Multi-Model Selection Guide](docs/manual/en/model_selection.md)
+- [Model Selection Configuration](DEEPSEEK_MODELS.md)
+
+### v0.3.1 - Builtin Skills
+**Release Date**: 2026-01-29
+
+**New Features:**
+- ✨ **3 Preinstalled Builtin Skills** - Ready to use immediately
+  - **text-processing** - 20+ text operations (uppercase, lowercase, extract emails/URLs, etc.)
+  - **json-processor** - 8 JSON operations (parse, format, validate, extract, merge)
+  - **data-analyzer** - 17 statistical operations (mean, median, variance, group_by, etc.)
+- ⚡ **Automatic Preinstallation** - Skills loaded at startup, no configuration needed
+- 📦 **Zero Dependencies** - Pure Python implementations, work offline
+- 🔄 **Visual Feedback** - Loading spinner and status display during execution
+
+**Documentation:**
+- [Builtin Skills Reference](docs/BUILTIN_SKILLS.md)
+- Complete usage examples for all operations
+
+### v0.3.0 - Agent Skill System
+**Release Date**: 2026-01-29
+
+**New Features:**
+- ✨ **Dynamic Skill System** - Expand Alpha's capabilities on-demand
+  - Auto-discovery and auto-installation of skills
+  - Skill marketplace integration
+  - Version management and dependencies
+- 🔍 **Skill Discovery** - Search and browse available skills
+- 📦 **Skill Management** - Install, update, and remove skills
+- 🏪 **Skill Marketplace** - Access community-contributed skills
+- 🎨 **CLI Integration** - New `skills` and `search skill` commands
+
+**Architecture:**
+- AgentSkill base class for creating custom skills
+- SkillRegistry for lifecycle management
+- SkillMarketplace for discovery
+- SkillInstaller for dependencies
+- SkillExecutor with auto-install support
+
+**Documentation:**
+- [Agent Skills Documentation](docs/AGENT_SKILLS.md)
+- [Quick Start Guide](docs/AGENT_SKILLS_QUICKSTART.md)
+- [Skills Usage Guide](docs/manual/en/skills_guide.md)
+
+### v0.2.0 - Task Scheduling & Enhanced Tools
 **Release Date**: 2026-01-29
 
 **New Features:**
@@ -245,8 +312,15 @@ ls -la data/
 ### User Guides
 - [Quick Start Guide](docs/manual/en/quickstart.md) - Get started in 5 minutes
 - [Features Guide](docs/manual/en/features.md) - Complete feature documentation
+- [Model Selection Guide](docs/manual/en/model_selection.md) - Intelligent multi-model selection
+- [Skills Usage Guide](docs/manual/en/skills_guide.md) - Dynamic skill system
 - [API Setup Guide](docs/API_SETUP.md) - Configure AI providers
 - [Tool Usage Guide](docs/TOOL_USAGE_GUIDE.md) - How to use each tool
+
+### Technical Documentation
+- [Agent Skills System](docs/AGENT_SKILLS.md) - Technical documentation
+- [Builtin Skills Reference](docs/BUILTIN_SKILLS.md) - Preinstalled skills
+- [Multi-Model Selection](DEEPSEEK_MODELS.md) - DeepSeek models configuration
 
 ### API Provider Guides
 - [DeepSeek Setup](docs/DEEPSEEK_GUIDE.md) - DeepSeek configuration
@@ -255,6 +329,8 @@ ls -la data/
 ### 中文文档
 - [快速开始](docs/manual/zh/quickstart.md)
 - [功能说明](docs/manual/zh/features.md)
+- [模型选择指南](docs/manual/zh/model_selection.md)
+- [技能使用指南](docs/manual/zh/skills_guide.md)
 - [API配置](docs/API_SETUP.md)
 
 ## Frequently Asked Questions
@@ -289,6 +365,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Current Version**: v0.2.0
+**Current Version**: v0.4.0
 **Status**: Production Ready
 **Default AI Provider**: DeepSeek (Most Cost-Effective)

@@ -1,10 +1,108 @@
 # Alpha AI Assistant - Features & Usage Guide
 
-## Current Version: 0.2.0 (Phase 1 Enhanced)
+## Current Version: 0.4.0
 
 ## Core Features
 
-### 1. 24/7 Continuous Operation
+### 1. Intelligent Multi-Model Selection
+- ✅ Automatic task analysis and optimal model routing
+- ✅ Support for deepseek-chat, deepseek-coder, deepseek-reasoner
+- ✅ Task difficulty classification (simple, medium, complex, expert)
+- ✅ Cost optimization through smart model matching
+
+**Usage**:
+```yaml
+# config.yaml
+llm:
+  default_provider: "deepseek"
+  providers:
+    deepseek:
+      auto_select_model: true  # Enable automatic selection
+      default_model: "deepseek-chat"
+      models:
+        deepseek-chat:
+          difficulty_range: ["simple", "medium"]
+        deepseek-coder:
+          difficulty_range: ["medium", "complex"]
+        deepseek-reasoner:
+          difficulty_range: ["complex", "expert"]
+```
+
+**How It Works**:
+- **Task Analysis**: Analyzes user messages for coding keywords, reasoning requirements, expert topics
+- **Priority-Based Selection**:
+  1. Expert/complex reasoning tasks → deepseek-reasoner
+  2. Coding tasks → deepseek-coder
+  3. General tasks → deepseek-chat
+
+**See Also**: [Model Selection Guide](model_selection.md)
+
+### 2. Agent Skill System
+- ✅ Dynamic skill discovery and installation
+- ✅ Skill marketplace integration
+- ✅ Version management and dependencies
+- ✅ Community-contributed skills
+
+**Usage**:
+```bash
+# In Alpha CLI
+skills                    # List installed skills
+search skill text        # Search for skills
+```
+
+**In Conversation**:
+```
+You: Convert "hello world" to uppercase
+
+Alpha: I'll use the text-processing skill for this.
+
+SKILL: text-processing
+PARAMS:
+  operation: "uppercase"
+  text: "hello world"
+
+Alpha: The result is "HELLO WORLD"
+```
+
+**Architecture**:
+- **AgentSkill**: Base class for creating skills
+- **SkillRegistry**: Manages installed skills
+- **SkillMarketplace**: Discovers and downloads skills
+- **SkillInstaller**: Installs skills and dependencies
+- **SkillExecutor**: Executes skills with auto-install
+
+**See Also**: [Skills Usage Guide](skills_guide.md)
+
+### 3. Builtin Skills
+- ✅ 3 preinstalled skills ready to use immediately
+- ✅ Zero dependencies, pure Python
+- ✅ Automatic loading at startup
+
+**Available Builtin Skills**:
+
+**text-processing** - 20+ text operations
+- Case transformations: uppercase, lowercase, titlecase, capitalize
+- String operations: reverse, trim, strip
+- Split and join operations
+- Extraction: emails, URLs, numbers
+- Formatting: truncate, pad
+
+**json-processor** - 8 JSON operations
+- parse, stringify, format, minify
+- validate, extract (by path), merge, filter
+
+**data-analyzer** - 17 statistical operations
+- Basic stats: mean, median, mode, min, max, range, sum, count
+- Advanced stats: variance, stdev, percentile, quartiles
+- Data ops: group_by, aggregate, sort, filter, summary
+
+**Usage**:
+```python
+# Automatically available, no installation needed
+# Skills are loaded at startup
+```
+
+### 4. 24/7 Continuous Operation
 - ✅ Asyncio-based async event loop
 - ✅ Graceful startup and shutdown process
 - ✅ Automatic error recovery mechanism
@@ -470,6 +568,6 @@ interface:
 
 ---
 
-**Version**: v0.2.0
+**Version**: v0.4.0
 **Last Updated**: 2026-01-29
-**Status**: Phase 1 Enhanced - Tools Expansion Complete ✅
+**Status**: Production Ready - Intelligent Multi-Model Selection ✅

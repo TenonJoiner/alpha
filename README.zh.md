@@ -1,4 +1,5 @@
-# Alpha AI 助手
+# Alpha：由AI自己定义并实现的 AI 助手
+通过 `cat make_alpha.md | claude --dangerously-skip-permissions` 命令构建
 
 [English](README.md) | 简体中文
 
@@ -15,6 +16,9 @@ Alpha是由先进AI模型驱动的智能个人助手。它可以:
 - 🌐 **搜索网络** - 在线查找信息
 - ⏰ **处理时间** - 处理日期、时间和时区
 - 🤖 **多AI支持** - 可选择DeepSeek、Claude或GPT-4
+- 🧠 **智能模型选择** - 自动任务分析和最优模型路由
+- 🎯 **动态技能** - 通过可自动安装的技能扩展能力
+- ⚡ **内置技能** - 3个预装技能即开即用(文本、JSON、数据处理)
 
 ## 快速开始
 
@@ -155,7 +159,70 @@ Alpha> 我会为您设置定时任务...
 
 ## 版本发布记录
 
-### v0.2.0 (当前版本) - 任务调度与增强工具
+### v0.4.0 (当前版本) - 智能多模型选择
+**发布日期**: 2026-01-29
+
+**新功能:**
+- ✨ **智能模型选择** - 自动任务分析和最优模型路由
+  - 支持deepseek-chat、deepseek-coder、deepseek-reasoner
+  - 任务难度分析(简单、中等、复杂、专家级)
+  - 基于任务特征自动匹配模型
+  - 成本和性能优化
+- 📊 **任务分析器** - 高级任务特征检测
+  - 编程任务检测
+  - 推理需求分析
+  - 专家级主题识别
+- 🎯 **智能模型路由** - 基于优先级的模型选择
+  - deepseek-reasoner用于复杂推理和专家级任务
+  - deepseek-coder用于编程任务
+  - deepseek-chat用于一般对话
+
+**文档:**
+- [多模型选择指南](docs/manual/zh/model_selection.md)
+- [模型选择配置](DEEPSEEK_MODELS.md)
+
+### v0.3.1 - 内置技能
+**发布日期**: 2026-01-29
+
+**新功能:**
+- ✨ **3个预装内置技能** - 即开即用
+  - **text-processing** - 20+文本操作(大小写转换、提取邮箱/网址等)
+  - **json-processor** - 8种JSON操作(解析、格式化、验证、提取、合并)
+  - **data-analyzer** - 17种统计操作(均值、中位数、方差、分组等)
+- ⚡ **自动预安装** - 启动时自动加载技能,无需配置
+- 📦 **零依赖** - 纯Python实现,可离线工作
+- 🔄 **视觉反馈** - 执行期间的加载动画和状态显示
+
+**文档:**
+- [内置技能参考](docs/BUILTIN_SKILLS.md)
+- 所有操作的完整使用示例
+
+### v0.3.0 - Agent技能系统
+**发布日期**: 2026-01-29
+
+**新功能:**
+- ✨ **动态技能系统** - 按需扩展Alpha的能力
+  - 自动发现和自动安装技能
+  - 技能市场集成
+  - 版本管理和依赖处理
+- 🔍 **技能发现** - 搜索和浏览可用技能
+- 📦 **技能管理** - 安装、更新和删除技能
+- 🏪 **技能市场** - 访问社区贡献的技能
+- 🎨 **CLI集成** - 新增`skills`和`search skill`命令
+
+**架构:**
+- AgentSkill基类用于创建自定义技能
+- SkillRegistry用于生命周期管理
+- SkillMarketplace用于发现
+- SkillInstaller用于依赖处理
+- SkillExecutor支持自动安装
+
+**文档:**
+- [Agent技能文档](docs/AGENT_SKILLS.md)
+- [快速开始指南](docs/AGENT_SKILLS_QUICKSTART.md)
+- [技能使用指南](docs/manual/zh/skills_guide.md)
+
+### v0.2.0 - 任务调度与增强工具
 **发布日期**: 2026-01-29
 
 **新功能:**
@@ -245,8 +312,15 @@ ls -la data/
 ### 用户指南
 - [快速开始指南](docs/manual/zh/quickstart.md) - 5分钟上手
 - [功能指南](docs/manual/zh/features.md) - 完整功能文档
+- [模型选择指南](docs/manual/zh/model_selection.md) - 智能多模型选择
+- [技能使用指南](docs/manual/zh/skills_guide.md) - 动态技能系统
 - [API设置指南](docs/API_SETUP.md) - 配置AI提供商
 - [工具使用指南](docs/TOOL_USAGE_GUIDE.md) - 如何使用各个工具
+
+### 技术文档
+- [Agent技能系统](docs/AGENT_SKILLS.md) - 技术文档
+- [内置技能参考](docs/BUILTIN_SKILLS.md) - 预装技能
+- [多模型选择](DEEPSEEK_MODELS.md) - DeepSeek模型配置
 
 ### API提供商指南
 - [DeepSeek设置](docs/DEEPSEEK_GUIDE.md) - DeepSeek配置
@@ -284,6 +358,6 @@ MIT许可证 - 详见[LICENSE](LICENSE)文件
 
 ---
 
-**当前版本**: v0.2.0
+**当前版本**: v0.4.0
 **状态**: 生产就绪
 **默认AI提供商**: DeepSeek(性价比最高)

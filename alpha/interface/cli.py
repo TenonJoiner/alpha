@@ -614,8 +614,9 @@ async def run_cli():
         tool_registry = create_default_registry()
 
         # Create skill system
+        skill_config = config.dict().get('skills', {}) if hasattr(config, 'dict') else {}
         skill_registry = SkillRegistry()
-        skill_marketplace = SkillMarketplace()
+        skill_marketplace = SkillMarketplace(config=skill_config)
         skill_installer = SkillInstaller()
 
         # Preinstall builtin skills
@@ -624,11 +625,16 @@ async def run_cli():
         if installed_count > 0:
             console.print(f"[green]✓[/green] Loaded {installed_count} builtin skills")
 
+        # Load external skill sources
+        console.print("[blue]Connecting to skill sources...[/blue]")
+        if skill_config.get('sources'):
+            console.print(f"[dim]Found {len(skill_config['sources'])} skill sources[/dim]")
+
         skill_executor = SkillExecutor(
             registry=skill_registry,
             marketplace=skill_marketplace,
             installer=skill_installer,
-            auto_install=True
+            auto_install=skill_config.get('auto_install', True)
         )
 
         # Create and start CLI

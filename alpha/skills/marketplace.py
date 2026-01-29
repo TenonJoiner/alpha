@@ -26,34 +26,47 @@ class SkillMarketplace:
     Features:
     - Search skills by name, category, or tags
     - Download skills from remote repositories
-    - Support multiple skill sources (GitHub, local registry, etc.)
+    - Support multiple skill sources (GitHub, local registry, API endpoints)
     - Cache skill metadata for fast lookup
     """
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Optional[Path] = None, config: Optional[Dict] = None):
         self.cache_dir = cache_dir or Path.home() / ".alpha" / "skill_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.metadata_cache: Dict[str, SkillMetadata] = {}
-        self.sources: List[str] = []
+        self.sources: List[Dict] = []
+        self.config = config or {}
 
         # Default skill sources
         self._load_default_sources()
+
+        # Load sources from config if provided
+        if config and 'sources' in config:
+            self._load_config_sources(config['sources'])
 
     def _load_default_sources(self):
         """Load default skill sources."""
         # Builtin skills registry (highest priority)
         builtin_registry = Path(__file__).parent / "builtin" / "registry.json"
         if builtin_registry.exists():
-            self.sources.append(str(builtin_registry))
+            self.sources.append({
+                'name': 'Builtin Skills',
+                'url': str(builtin_registry),
+                'type': 'local',
+                'enabled': True,
+                'priority': 0
+            })
 
-        # Alpha official skill repository (example)
-        self.sources.append("https://raw.githubusercontent.com/alpha-ai/skills/main/registry.json")
+    def _load_config_sources(self, sources: List[Dict]):
+        """Load skill sources from config."""
+        for source in sources:
+            if source.get('enabled', True):
+                self.sources.append(source)
+                logger.info(f"Added skill source: {source['name']} ({source['url']})")
 
-        # Local skill directory
-        local_registry = Path.home() / ".alpha" / "local_skills" / "registry.json"
-        if local_registry.exists():
-            self.sources.append(str(local_registry))
+        # Sort by priority
+        self.sources.sort(key=lambda x: x.get('priority', 999))
 
     def add_source(self, source: str):
         """
@@ -212,32 +225,81 @@ class SkillMarketplace:
         logger.info("Updating skill metadata cache...")
 
         for source in self.sources:
+            if not source.get('enabled', True):
+                continue
+
             try:
-                if source.startswith("http://") or source.startswith("https://"):
-                    # Remote source
-                    await self._fetch_remote_registry(source)
+                source_type = source.get('type', 'unknown')
+                source_url = source.get('url', '')
+                source_name = source.get('name', 'Unknown')
+
+                logger.info(f"Loading from source: {source_name}")
+
+                if source_type == 'local':
+                    # Local file
+                    await self._load_local_registry(source_url)
+                elif source_type == 'github':
+                    # GitHub repository
+                    await self._fetch_github_registry(source_url, source_name)
+                elif source_type == 'api':
+                    # API endpoint
+                    await self._fetch_api_registry(source_url, source_name)
                 else:
-                    # Local source
-                    await self._load_local_registry(source)
+                    logger.warning(f"Unknown source type: {source_type}")
 
             except Exception as e:
-                logger.error(f"Error loading source {source}: {e}", exc_info=True)
+                logger.error(f"Error loading source {source.get('name', 'unknown')}: {e}", exc_info=True)
 
         logger.info(f"Cache updated: {len(self.metadata_cache)} skills available")
 
-    async def _fetch_remote_registry(self, url: str):
-        """Fetch skill registry from remote URL."""
+    async def _fetch_github_registry(self, repo_url: str, source_name: str):
+        """Fetch skill registry from GitHub repository."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self._parse_registry(data)
-                    else:
-                        logger.warning(f"Failed to fetch {url}: HTTP {response.status}")
+            # Convert GitHub repo URL to raw content URL for registry.json
+            # Example: https://github.com/user/repo -> https://raw.githubusercontent.com/user/repo/main/registry.json
+            if "github.com" in repo_url:
+                raw_url = repo_url.replace("github.com", "raw.githubusercontent.com")
+                if not raw_url.endswith("/"):
+                    raw_url += "/"
+                raw_url += "main/registry.json"  # Try main branch first
+
+                logger.info(f"Fetching from GitHub: {raw_url}")
+                await self._fetch_remote_registry(raw_url, source_name)
+            else:
+                logger.warning(f"Invalid GitHub URL: {repo_url}")
 
         except Exception as e:
-            logger.error(f"Error fetching remote registry {url}: {e}")
+            logger.error(f"Error fetching GitHub registry from {repo_url}: {e}")
+
+    async def _fetch_api_registry(self, api_url: str, source_name: str):
+        """Fetch skill registry from API endpoint."""
+        try:
+            logger.info(f"Fetching from API: {api_url}")
+            await self._fetch_remote_registry(api_url, source_name)
+        except Exception as e:
+            logger.error(f"Error fetching API registry from {api_url}: {e}")
+
+    async def _fetch_remote_registry(self, url: str, source_name: str = "Unknown"):
+        """Fetch skill registry from remote URL."""
+        try:
+            timeout = self.config.get('download', {}).get('timeout', 30)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        self._parse_registry(data, source_name)
+                        logger.info(f"Successfully loaded skills from {source_name}")
+                    elif response.status == 404:
+                        logger.warning(f"Registry not found at {url} ({source_name}) - may not exist yet")
+                    else:
+                        logger.warning(f"Failed to fetch {url} ({source_name}): HTTP {response.status}")
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout fetching registry from {source_name}")
+        except aiohttp.ClientError as e:
+            logger.warning(f"Network error fetching from {source_name}: {e}")
+        except Exception as e:
+            logger.error(f"Error fetching remote registry {source_name}: {e}")
 
     async def _load_local_registry(self, path: str):
         """Load skill registry from local file."""
@@ -260,11 +322,13 @@ class SkillMarketplace:
         except Exception as e:
             logger.error(f"Error loading local registry {path}: {e}")
 
-    def _parse_registry(self, data: Dict):
+    def _parse_registry(self, data: Dict, source_name: str = "Unknown"):
         """Parse registry data and update cache."""
         if "skills" not in data:
+            logger.warning(f"No 'skills' key found in registry from {source_name}")
             return
 
+        skill_count = 0
         for skill_data in data["skills"]:
             try:
                 metadata = SkillMetadata(
@@ -282,11 +346,14 @@ class SkillMarketplace:
                 )
 
                 self.metadata_cache[metadata.name] = metadata
+                skill_count += 1
 
             except KeyError as e:
-                logger.warning(f"Invalid skill metadata: missing field {e}")
+                logger.warning(f"Invalid skill metadata from {source_name}: missing field {e}")
             except Exception as e:
-                logger.error(f"Error parsing skill metadata: {e}")
+                logger.error(f"Error parsing skill metadata from {source_name}: {e}")
+
+        logger.info(f"Loaded {skill_count} skills from {source_name}")
 
     async def _download_from_repo(self, repo_url: str, target_dir: Path) -> bool:
         """

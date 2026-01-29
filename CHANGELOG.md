@@ -4,6 +4,88 @@
 
 # <a name="english"></a>English
 
+# Alpha Agent Skills Integration - v0.4.0
+
+## Update Date
+2026-01-29
+
+## Major Changes
+
+### 1. Integrated Skills.sh Marketplace
+
+**New Feature:**
+Alpha now supports external agent skills from the skills.sh marketplace.
+
+**Skills Installed (20 total):**
+
+**Frontend Development (8 skills):**
+- ✅ **vercel-react-best-practices** (67K installs) - React/Next.js performance optimization
+- ✅ **web-design-guidelines** (52K installs) - Web interface design compliance
+- ✅ **vercel-composition-patterns** (7.6K installs) - React component patterns
+- ✅ **vercel-react-native-skills** (6K installs) - React Native best practices
+- ✅ **frontend-design** (26K installs) - Frontend design guidelines
+- ✅ **ui-ux-pro-max** (6.7K installs) - Advanced UI/UX design
+- ✅ **remotion-best-practices** (48K installs) - Programmatic video with React
+- ✅ **agent-browser** (14K installs) - Browser automation for agents
+
+**Document Processing (4 skills):**
+- ✅ **pdf** (5.2K installs) - PDF document creation and manipulation
+- ✅ **docx** - Word document processing
+- ✅ **pptx** - PowerPoint presentation creation
+- ✅ **xlsx** - Excel spreadsheet processing
+
+**Marketing & Content (2 skills):**
+- ✅ **seo-audit** (7.4K installs) - SEO analysis and optimization
+- ✅ **copywriting** (5.6K installs) - Marketing copy creation
+
+**Database & Auth (2 skills):**
+- ✅ **supabase-postgres-best-practices** (7K installs) - Database optimization
+- ✅ **better-auth-best-practices** (5.1K installs) - Authentication patterns
+
+**Tools & Utilities (4 skills):**
+- ✅ **find-skills** (40K installs) - Discover and install skills
+- ✅ **skill-creator** (15K installs) - Create custom skills
+- ✅ **brainstorming** (4.9K installs) - Creative problem solving
+- ✅ **audit-website** (7.2K installs) - Website quality audit
+
+**Installation Method:**
+- Command: `npx skills add <owner/repo>`
+- Installed to: `.agents/skills/`
+- Format: SKILL.md (YAML frontmatter + Markdown)
+- Compatible with Claude Code and other agents
+
+**Configuration:**
+```yaml
+skills:
+  sources:
+    - name: "Skills.sh"
+      url: "https://skills.sh/api/skills"
+      type: "api"
+  downloaded_dir: ".agents/skills"
+```
+
+**Usage:**
+```bash
+# List installed skills
+npx skills list
+
+# Search for skills
+npx skills find [query]
+
+# Add new skills
+npx skills add <owner/repo>
+
+# Update skills
+npx skills update
+```
+
+**Documentation:**
+- Skill list: `docs/INSTALLED_SKILLS.md`
+- Configuration: `config.yaml`
+- Marketplace: https://skills.sh/
+
+---
+
 # Alpha Builtin Skills - v0.3.1
 
 ## Update Date

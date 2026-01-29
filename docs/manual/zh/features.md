@@ -1,10 +1,108 @@
 # Alpha AI Assistant - Features & Usage Guide
 
-## Current Version: 0.2.0 (Phase 1 Enhanced)
+## Current Version: 0.4.0
 
 ## 核心功能
 
-### 1. 24/7 持续运行
+### 1. 智能多模型选择
+- ✅ 自动任务分析和最优模型路由
+- ✅ 支持deepseek-chat、deepseek-coder、deepseek-reasoner
+- ✅ 任务难度分类(简单、中等、复杂、专家级)
+- ✅ 通过智能模型匹配优化成本
+
+**使用方式**:
+```yaml
+# config.yaml
+llm:
+  default_provider: "deepseek"
+  providers:
+    deepseek:
+      auto_select_model: true  # 启用自动选择
+      default_model: "deepseek-chat"
+      models:
+        deepseek-chat:
+          difficulty_range: ["simple", "medium"]
+        deepseek-coder:
+          difficulty_range: ["medium", "complex"]
+        deepseek-reasoner:
+          difficulty_range: ["complex", "expert"]
+```
+
+**工作原理**:
+- **任务分析**: 分析用户消息中的编程关键词、推理需求、专家主题
+- **基于优先级的选择**:
+  1. 专家级/复杂推理任务 → deepseek-reasoner
+  2. 编程任务 → deepseek-coder
+  3. 一般任务 → deepseek-chat
+
+**另见**: [模型选择指南](model_selection.md)
+
+### 2. Agent技能系统
+- ✅ 动态技能发现和安装
+- ✅ 技能市场集成
+- ✅ 版本管理和依赖处理
+- ✅ 社区贡献的技能
+
+**使用方式**:
+```bash
+# 在Alpha CLI中
+skills                    # 列出已安装的技能
+search skill text        # 搜索技能
+```
+
+**在对话中**:
+```
+You: 将"hello world"转换为大写
+
+Alpha: 我将使用text-processing技能。
+
+SKILL: text-processing
+PARAMS:
+  operation: "uppercase"
+  text: "hello world"
+
+Alpha: 结果是"HELLO WORLD"
+```
+
+**架构**:
+- **AgentSkill**: 创建技能的基类
+- **SkillRegistry**: 管理已安装的技能
+- **SkillMarketplace**: 发现和下载技能
+- **SkillInstaller**: 安装技能和依赖
+- **SkillExecutor**: 执行技能并支持自动安装
+
+**另见**: [技能使用指南](skills_guide.md)
+
+### 3. 内置技能
+- ✅ 3个预装技能即开即用
+- ✅ 零依赖,纯Python
+- ✅ 启动时自动加载
+
+**可用内置技能**:
+
+**text-processing** - 20+文本操作
+- 大小写转换: uppercase, lowercase, titlecase, capitalize
+- 字符串操作: reverse, trim, strip
+- 分割和合并操作
+- 提取: 邮箱、网址、数字
+- 格式化: truncate, pad
+
+**json-processor** - 8种JSON操作
+- parse, stringify, format, minify
+- validate, extract(按路径), merge, filter
+
+**data-analyzer** - 17种统计操作
+- 基础统计: mean, median, mode, min, max, range, sum, count
+- 高级统计: variance, stdev, percentile, quartiles
+- 数据操作: group_by, aggregate, sort, filter, summary
+
+**使用方式**:
+```python
+# 自动可用,无需安装
+# 技能在启动时加载
+```
+
+### 4. 24/7 持续运行
 - ✅ 基于asyncio的异步事件循环
 - ✅ 优雅的启动和关闭流程
 - ✅ 自动错误恢复机制
@@ -470,6 +568,6 @@ interface:
 
 ---
 
-**版本**: v0.2.0
+**版本**: v0.4.0
 **更新日期**: 2026-01-29
-**状态**: Phase 1 Enhanced - 工具扩展完成 ✅
+**状态**: 生产就绪 - 智能多模型选择 ✅

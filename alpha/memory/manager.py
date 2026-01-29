@@ -2,6 +2,7 @@
 Alpha - Memory Manager
 
 Persistent storage for conversations, tasks, and knowledge.
+Enhanced with vector memory capabilities for semantic search.
 """
 
 import asyncio
@@ -17,18 +18,32 @@ logger = logging.getLogger(__name__)
 
 class MemoryManager:
     """
-    Manages persistent storage using SQLite.
+    Manages persistent storage using SQLite and vector memory.
 
     Features:
-    - Conversation history
+    - Conversation history (SQLite + Vector)
     - Task execution logs
     - System events
-    - Knowledge base
+    - Knowledge base (SQLite + Vector with semantic search)
+    - User preferences (long-term memory)
+    - Context-aware retrieval
     """
 
-    def __init__(self, database_path: str):
+    def __init__(
+        self,
+        database_path: str,
+        vector_config: Optional[Dict] = None
+    ):
         self.database_path = Path(database_path)
         self.conn: Optional[sqlite3.Connection] = None
+        self.vector_config = vector_config or {}
+
+        # Vector memory components (initialized later)
+        self.vector_store = None
+        self.embedding_service = None
+        self.knowledge_base = None
+        self.context_retriever = None
+        self.vector_enabled = False
 
     async def initialize(self):
         """Initialize database and create tables."""
@@ -45,6 +60,9 @@ class MemoryManager:
         # Create tables
         await self._create_tables()
         logger.info(f"Memory system initialized: {self.database_path}")
+
+        # Initialize vector memory if configured
+        await self._initialize_vector_memory()
 
     async def _create_tables(self):
         """Create database tables."""
@@ -102,6 +120,74 @@ class MemoryManager:
 
         self.conn.commit()
 
+    async def _initialize_vector_memory(self):
+        """Initialize vector memory components."""
+        if not self.vector_config.get('enabled', False):
+            logger.info("Vector memory disabled in config")
+            return
+
+        try:
+            from alpha.vector_memory import (
+                VectorStore,
+                EmbeddingService,
+                KnowledgeBase,
+                ContextRetriever,
+            )
+            from alpha.vector_memory.embeddings import ChromaEmbeddingFunction
+
+            # Get configuration
+            vector_db_path = self.vector_config.get(
+                'path',
+                str(self.database_path.parent / 'vectors')
+            )
+            embedding_provider = self.vector_config.get(
+                'embedding_provider',
+                'openai'
+            )
+            embedding_model = self.vector_config.get('embedding_model')
+            max_context_tokens = self.vector_config.get(
+                'max_context_tokens',
+                4000
+            )
+
+            # Initialize embedding service
+            self.embedding_service = EmbeddingService(
+                provider=embedding_provider,
+                model=embedding_model
+            )
+
+            # Create ChromaDB-compatible embedding function
+            embedding_function = ChromaEmbeddingFunction(
+                self.embedding_service
+            )
+
+            # Initialize vector store
+            self.vector_store = VectorStore(
+                persist_directory=vector_db_path,
+                embedding_function=embedding_function
+            )
+
+            # Initialize knowledge base
+            self.knowledge_base = KnowledgeBase(
+                vector_store=self.vector_store,
+                embedding_service=self.embedding_service
+            )
+
+            # Initialize context retriever
+            self.context_retriever = ContextRetriever(
+                vector_store=self.vector_store,
+                embedding_service=self.embedding_service,
+                max_context_tokens=max_context_tokens
+            )
+
+            self.vector_enabled = True
+            logger.info("Vector memory initialized successfully")
+
+        except ImportError as e:
+            logger.warning(f"Vector memory dependencies not available: {e}")
+        except Exception as e:
+            logger.error(f"Failed to initialize vector memory: {e}")
+
     async def add_conversation(
         self,
         role: str,
@@ -130,6 +216,17 @@ class MemoryManager:
             )
         )
         self.conn.commit()
+
+        # Also add to vector memory if enabled
+        if self.vector_enabled and self.context_retriever:
+            try:
+                self.context_retriever.add_conversation(
+                    role=role,
+                    content=content,
+                    metadata=metadata
+                )
+            except Exception as e:
+                logger.warning(f"Failed to add conversation to vector memory: {e}")
 
     async def get_conversation_history(
         self,
@@ -307,6 +404,38 @@ class MemoryManager:
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
+    async def retrieve_relevant_context(
+        self,
+        query: str,
+        include_conversations: bool = True,
+        include_knowledge: bool = True
+    ) -> str:
+        """
+        Retrieve relevant context for a query.
+
+        Args:
+            query: Search query
+            include_conversations: Include relevant conversations
+            include_knowledge: Include relevant knowledge
+
+        Returns:
+            Formatted context string
+        """
+        if not self.vector_enabled or not self.context_retriever:
+            return ""
+
+        try:
+            context = self.context_retriever.build_context(
+                query=query,
+                include_conversations=include_conversations,
+                include_knowledge=include_knowledge,
+                knowledge_base=self.knowledge_base
+            )
+            return context
+        except Exception as e:
+            logger.error(f"Failed to retrieve context: {e}")
+            return ""
+
     async def get_stats(self) -> Dict:
         """Get memory statistics."""
         cursor = self.conn.cursor()
@@ -328,6 +457,18 @@ class MemoryManager:
         # Count knowledge items
         cursor.execute("SELECT COUNT(*) as count FROM knowledge")
         stats['knowledge'] = cursor.fetchone()['count']
+
+        # Add vector memory stats if enabled
+        if self.vector_enabled:
+            try:
+                if self.vector_store:
+                    stats['vector_store'] = self.vector_store.get_stats()
+                if self.knowledge_base:
+                    stats['knowledge_base_vector'] = self.knowledge_base.get_stats()
+                if self.context_retriever:
+                    stats['context_retriever'] = self.context_retriever.get_stats()
+            except Exception as e:
+                logger.warning(f"Failed to get vector memory stats: {e}")
 
         return stats
 
