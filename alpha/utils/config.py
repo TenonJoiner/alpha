@@ -40,10 +40,21 @@ class LLMConfig:
 
 
 @dataclass
+class VectorMemoryConfig:
+    """Vector memory configuration."""
+    enabled: bool = False
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
+    max_context_tokens: int = 4000
+    persist_directory: str = "data/vectors"
+
+
+@dataclass
 class MemoryConfig:
     """Memory configuration."""
     database: str
     vector_db: str = None
+    vector_memory: VectorMemoryConfig = None
 
 
 @dataclass
@@ -125,6 +136,22 @@ def load_config(config_path: str = "config.yaml") -> Config:
         else:
             providers[name] = LLMProviderConfig(**provider_data)
 
+    # Parse vector memory configuration if present
+    vector_memory_cfg = None
+    if 'vector_memory' in memory_config:
+        vm_data = memory_config['vector_memory']
+        vector_memory_cfg = VectorMemoryConfig(
+            enabled=vm_data.get('enabled', False),
+            embedding_provider=vm_data.get('embedding_provider', 'openai'),
+            embedding_model=vm_data.get('embedding_model', 'text-embedding-3-small'),
+            max_context_tokens=vm_data.get('max_context_tokens', 4000),
+            persist_directory=vm_data.get('persist_directory', 'data/vectors')
+        )
+
+    # Build memory config (excluding vector_memory dict to avoid duplication)
+    memory_config_copy = {k: v for k, v in memory_config.items() if k != 'vector_memory'}
+    memory_config_copy['vector_memory'] = vector_memory_cfg
+
     return Config(
         name=alpha_config.get('name', 'Alpha'),
         version=alpha_config.get('version', '0.1.0'),
@@ -132,7 +159,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
             default_provider=llm_config.get('default_provider', 'openai'),
             providers=providers
         ),
-        memory=MemoryConfig(**memory_config),
+        memory=MemoryConfig(**memory_config_copy),
         tools=ToolsConfig(**tools_config),
         interface=InterfaceConfig(
             cli_enabled=interface_config.get('cli', {}).get('enabled', True),
