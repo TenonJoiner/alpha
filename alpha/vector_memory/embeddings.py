@@ -16,6 +16,7 @@ class EmbeddingProvider(Enum):
     """Supported embedding providers."""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
     LOCAL = "local"
 
 
@@ -25,6 +26,7 @@ class EmbeddingService:
 
     Supports:
     - OpenAI embeddings (text-embedding-3-small, text-embedding-3-large)
+    - DeepSeek embeddings (deepseek-embedding-v2) - OpenAI-compatible API
     - Anthropic embeddings (via voyageai)
     - Local embeddings (sentence-transformers)
     """
@@ -39,7 +41,7 @@ class EmbeddingService:
         Initialize embedding service.
 
         Args:
-            provider: Embedding provider (openai, anthropic, local)
+            provider: Embedding provider (openai, deepseek, anthropic, local)
             model: Model name (provider-specific)
             api_key: API key (if required)
         """
@@ -55,6 +57,8 @@ class EmbeddingService:
         """Initialize the embedding client based on provider."""
         if self.provider == EmbeddingProvider.OPENAI:
             self._initialize_openai()
+        elif self.provider == EmbeddingProvider.DEEPSEEK:
+            self._initialize_deepseek()
         elif self.provider == EmbeddingProvider.ANTHROPIC:
             self._initialize_anthropic()
         elif self.provider == EmbeddingProvider.LOCAL:
@@ -78,6 +82,30 @@ class EmbeddingService:
             raise
         except Exception as e:
             logger.error(f"Failed to initialize OpenAI embeddings: {e}")
+            raise
+
+    def _initialize_deepseek(self):
+        """Initialize DeepSeek embeddings client (OpenAI-compatible API)."""
+        try:
+            from openai import OpenAI
+
+            api_key = self.api_key or os.getenv("DEEPSEEK_API_KEY")
+            if not api_key:
+                raise ValueError("DeepSeek API key not provided")
+
+            # DeepSeek uses OpenAI-compatible API
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com/v1"
+            )
+            self.model = self.model or "deepseek-embedding-v2"
+
+            logger.info(f"DeepSeek embeddings initialized: {self.model}")
+        except ImportError:
+            logger.error("OpenAI package not installed (required for DeepSeek)")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to initialize DeepSeek embeddings: {e}")
             raise
 
     def _initialize_anthropic(self):
@@ -136,6 +164,8 @@ class EmbeddingService:
         try:
             if self.provider == EmbeddingProvider.OPENAI:
                 return self._embed_openai(texts)
+            elif self.provider == EmbeddingProvider.DEEPSEEK:
+                return self._embed_deepseek(texts)
             elif self.provider == EmbeddingProvider.ANTHROPIC:
                 return self._embed_anthropic(texts)
             elif self.provider == EmbeddingProvider.LOCAL:
@@ -153,6 +183,17 @@ class EmbeddingService:
 
         embeddings = [item.embedding for item in response.data]
         logger.info(f"Generated {len(embeddings)} OpenAI embeddings")
+        return embeddings
+
+    def _embed_deepseek(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using DeepSeek (OpenAI-compatible API)."""
+        response = self.client.embeddings.create(
+            model=self.model,
+            input=texts
+        )
+
+        embeddings = [item.embedding for item in response.data]
+        logger.info(f"Generated {len(embeddings)} DeepSeek embeddings")
         return embeddings
 
     def _embed_anthropic(self, texts: List[str]) -> List[List[float]]:
@@ -205,6 +246,13 @@ class EmbeddingService:
             elif "text-embedding-3-large" in self.model:
                 return 3072
             elif "text-embedding-ada-002" in self.model:
+                return 1536
+            else:
+                return 1536  # default
+
+        elif self.provider == EmbeddingProvider.DEEPSEEK:
+            # DeepSeek embedding dimension
+            if "deepseek-embedding-v2" in self.model:
                 return 1536
             else:
                 return 1536  # default

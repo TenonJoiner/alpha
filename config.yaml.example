@@ -1,0 +1,162 @@
+alpha:
+  name: "Alpha Assistant"
+  version: "0.1.0"
+
+llm:
+  default_provider: "deepseek"
+  providers:
+    openai:
+      api_key: "${OPENAI_API_KEY}"
+      model: "gpt-4"
+      max_tokens: 4096
+      temperature: 0.7
+    anthropic:
+      # Primary API key (supports both ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN)
+      # ANTHROPIC_API_KEY: Standard Anthropic API key (for official API)
+      # ANTHROPIC_AUTH_TOKEN: Claude Code specific credential (for proxy/moacode.org)
+      api_key: "${ANTHROPIC_API_KEY:-${ANTHROPIC_AUTH_TOKEN}}"
+
+      # Base URL - defaults to official API if not set
+      # For moacode.org proxy: set ANTHROPIC_BASE_URL=https://moacode.org
+      # For official API: leave unset or set to https://api.anthropic.com
+      base_url: "${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
+
+      model: "claude-sonnet-4-5-20250929"
+      max_tokens: 8192
+      temperature: 0.7
+    deepseek:
+      # DeepSeek API key (get from https://platform.deepseek.com/api_keys)
+      api_key: "${DEEPSEEK_API_KEY}"
+
+      # Default model to use when not auto-selecting
+      default_model: "deepseek-chat"
+
+      # Enable automatic model selection based on task difficulty
+      auto_select_model: true
+
+      # Model configurations
+      # Each model has specific capabilities and cost characteristics
+      models:
+        deepseek-chat:
+          # General-purpose chat model - best for simple to medium tasks
+          max_tokens: 4096
+          temperature: 0.7
+          difficulty_range: ["simple", "medium"]  # Suitable for simple and medium tasks
+
+        deepseek-reasoner:
+          # Advanced reasoning model (DeepSeek-R1) - best for complex reasoning tasks
+          max_tokens: 8192
+          temperature: 0.6
+          difficulty_range: ["complex", "expert"]  # Suitable for complex and expert tasks
+
+        deepseek-coder:
+          # Specialized coding model - best for code generation and debugging
+          max_tokens: 4096
+          temperature: 0.7
+          difficulty_range: ["medium", "complex"]  # Suitable for medium and complex coding tasks
+
+memory:
+  database: "data/alpha.db"
+  vector_db: "data/vectors"
+
+  # Vector memory configuration (Phase 2 - REQ-2.3)
+  vector_memory:
+    # Enable vector memory features (semantic search, context-aware responses)
+    enabled: true
+
+    # Vector database path
+    path: "data/vectors"
+
+    # Embedding provider: openai, deepseek, anthropic, local
+    # Recommended: deepseek (most cost-effective) or openai (highest quality)
+    embedding_provider: "deepseek"
+
+    # Embedding model (provider-specific)
+    # OpenAI: text-embedding-3-small, text-embedding-3-large
+    # DeepSeek: deepseek-embedding-v2 (OpenAI-compatible API)
+    # Anthropic: voyage-2 (via Voyage AI)
+    # Local: all-MiniLM-L6-v2 (sentence-transformers, not recommended)
+    embedding_model: "deepseek-embedding-v2"
+
+    # Maximum tokens for context retrieval
+    max_context_tokens: 4000
+
+    # Automatic context retrieval settings
+    auto_retrieve_context: true
+    conversation_history_days: 30  # How many days of history to search
+    max_retrieved_conversations: 5
+    max_retrieved_knowledge: 3
+
+tools:
+  enabled:
+    - shell
+    - file
+    - search
+  sandbox: true
+
+interface:
+  cli:
+    enabled: true
+  api:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8000
+
+# Agent Skills Configuration
+skills:
+  # Enable automatic skill installation
+  auto_install: true
+
+  # Automatic Skill Discovery and Execution
+  auto_skill:
+    # Enable automatic skill discovery
+    enabled: true
+    # Automatically install missing skills
+    auto_install: true
+    # Automatically load skill context
+    auto_load: true
+    # Minimum relevance score to use a skill (0-10)
+    min_score: 3.0
+    # Maximum skills to consider per query
+    max_matches: 3
+
+  # Skill installation method
+  # Use: npx skills add <owner/repo>
+  # Examples:
+  #   npx skills add vercel-labs/agent-skills
+  #   npx skills add anthropics/skills
+  #   npx skills add <owner/repo> --list  (list available skills)
+  #   npx skills add <owner/repo> --skill <name>  (install specific skill)
+  #   npx skills list  (list installed skills)
+  #   npx skills find  (search for skills)
+  # Skills are installed to .agent/skills/ directory
+  # Documentation: https://skills.sh/
+
+  # Skill sources (checked in order)
+  sources:
+    # Skills.sh - Agent Skills Marketplace
+    # Browse: https://skills.sh/
+    # Install from any GitHub repo: npx skills add <owner/repo>
+    - name: "Skills.sh"
+      url: "https://skills.sh/api/skills"
+      type: "api"
+      enabled: true
+      priority: 1
+
+  # Local skills directory
+  local_dir: "${HOME}/.alpha/local_skills"
+
+  # Downloaded skills directory (from npx skills add)
+  downloaded_dir: ".agent/skills"
+
+  # Cache settings
+  cache:
+    enabled: true
+    ttl: 3600  # Cache TTL in seconds (1 hour)
+    dir: "${HOME}/.alpha/skill_cache"
+
+  # Download settings
+  download:
+    timeout: 30  # Timeout in seconds
+    retry: 3     # Number of retries
+    verify_ssl: true
