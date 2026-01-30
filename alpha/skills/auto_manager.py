@@ -30,7 +30,7 @@ class AutoSkillManager:
     def __init__(
         self,
         skills_dir: Path = None,
-        auto_install: bool = True,
+        auto_install: bool = False,  # Disabled by default for performance
         auto_load: bool = True
     ):
         """
@@ -38,7 +38,7 @@ class AutoSkillManager:
 
         Args:
             skills_dir: Directory for installed skills
-            auto_install: Automatically install missing skills
+            auto_install: Automatically install missing skills (disabled for performance)
             auto_load: Automatically load skill context
         """
         self.skills_dir = skills_dir or Path(".agents/skills")
@@ -46,12 +46,14 @@ class AutoSkillManager:
         self.auto_load = auto_load
 
         # Initialize components
-        self.matcher = SkillMatcher()
+        self.matcher = SkillMatcher(skills_dir=self.skills_dir)
         self.downloader = SkillDownloader(skills_dir=self.skills_dir)
         self.loader = SkillLoader(skills_dir=self.skills_dir)
 
         # Skill usage tracking
         self.usage_stats: Dict[str, int] = {}
+
+        logger.info(f"AutoSkillManager: auto_install={auto_install}, local_only mode")
 
     async def initialize(self):
         """Initialize the manager (load skill cache)."""
@@ -60,7 +62,7 @@ class AutoSkillManager:
 
     async def process_query(self, query: str) -> Optional[Dict[str, any]]:
         """
-        Process a user query and find/load relevant skill.
+        Process a user query and find/load relevant skill from local installations.
 
         Args:
             query: User query or request
@@ -68,37 +70,24 @@ class AutoSkillManager:
         Returns:
             Dict with skill info and context, or None
         """
-        # Find matching skills
+        # Find matching skills (local only, fast)
         matches = await self.matcher.find_skills(query, max_results=3)
 
         if not matches:
-            logger.info("No matching skills found for query")
+            logger.debug("No matching local skills found for query")
             return None
 
         best_match = matches[0]
-        logger.info(f"Best skill match: {best_match['name']} (score: {best_match['score']}, installs: {best_match['installs']})")
+        logger.info(f"Best skill match: {best_match['name']} (score: {best_match['score']})")
 
         # Check if we should use this skill (threshold)
         if best_match['score'] < 3.0:
-            logger.info(f"Skill score too low ({best_match['score']}), skipping")
+            logger.debug(f"Skill score too low ({best_match['score']}), skipping")
             return None
 
         skill_name = best_match['name']
-        skill_source = best_match['source']
 
-        # Ensure skill is installed
-        if self.auto_install:
-            if not self.downloader.is_installed(skill_name):
-                logger.info(f"Auto-installing skill: {skill_name}")
-                install_result = await self.downloader.install_skill_by_id(skill_name, skill_source)
-
-                if not install_result.get('success'):
-                    logger.error(f"Failed to install skill: {install_result.get('message')}")
-                    return None
-            else:
-                logger.info(f"Skill already installed: {skill_name}")
-
-        # Load skill context
+        # Load skill context (already installed locally)
         if self.auto_load:
             context = self.loader.get_skill_context(skill_name)
             if not context:
@@ -110,16 +99,15 @@ class AutoSkillManager:
 
             return {
                 'skill_name': skill_name,
-                'skill_source': skill_source,
+                'skill_source': 'local',
                 'context': context,
                 'matches': matches,  # All matches for reference
-                'score': best_match['score'],
-                'installs': best_match['installs']
+                'score': best_match['score']
             }
 
         return {
             'skill_name': skill_name,
-            'skill_source': skill_source,
+            'skill_source': 'local',
             'matches': matches
         }
 

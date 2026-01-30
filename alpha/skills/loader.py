@@ -123,19 +123,46 @@ You should follow the instructions above when responding to the user's request.
         return context
 
     def list_available_skills(self) -> list:
-        """List all available skills in the skills directory."""
+        """List all available skills in the skills directory (lightweight scan)."""
         if not self.skills_dir.exists():
             return []
 
         skills = []
         for item in self.skills_dir.iterdir():
             if item.is_dir() and (item / "SKILL.md").exists():
-                # Try to load metadata
-                skill = self.load_skill(item.name)
-                if skill:
+                # Lazy load: only load metadata when needed
+                # For now, just return basic info
+                try:
+                    # Quick metadata extraction (first few lines only)
+                    skill_file = item / "SKILL.md"
+                    description = self._quick_extract_description(skill_file)
                     skills.append({
                         'name': item.name,
-                        'description': skill['metadata'].get('description', 'No description')
+                        'description': description
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to scan skill {item.name}: {e}")
+                    skills.append({
+                        'name': item.name,
+                        'description': 'No description'
                     })
 
         return skills
+
+    def _quick_extract_description(self, skill_file: Path) -> str:
+        """Quick extraction of description from SKILL.md (first 20 lines only)."""
+        try:
+            with open(skill_file, 'r', encoding='utf-8') as f:
+                lines = []
+                for _ in range(20):
+                    line = f.readline()
+                    if not line:
+                        break
+                    if 'description:' in line.lower():
+                        # Extract description value
+                        parts = line.split(':', 1)
+                        if len(parts) == 2:
+                            return parts[1].strip().strip('"\'')
+            return 'No description'
+        except Exception:
+            return 'No description'

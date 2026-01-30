@@ -1,12 +1,10 @@
 """
 Automatic Skill Matcher
 
-Analyzes user requests and finds relevant skills from skills.sh marketplace.
+Analyzes user requests and finds relevant skills from local installed skills.
 """
 
 import logging
-import asyncio
-import aiohttp
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 
@@ -15,42 +13,97 @@ logger = logging.getLogger(__name__)
 
 class SkillMatcher:
     """
-    Intelligent skill matcher that finds relevant skills based on user queries.
+    Lightweight skill matcher that finds relevant skills from local installations.
 
     Features:
-    - Search skills.sh API for relevant skills
+    - Local-only matching (no network calls)
     - Keyword-based matching
-    - Ranking by install count and relevance
-    - Local skill cache
+    - Fast metadata scanning
+    - Lazy loading of skill content
     """
 
-    def __init__(self, api_url: str = "https://skills.sh/api/skills"):
-        self.api_url = api_url
+    def __init__(self, skills_dir: Path = None):
+        self.skills_dir = skills_dir or Path(".agents/skills")
         self.skills_cache: List[Dict] = []
         self.cache_loaded = False
 
     async def load_skills_cache(self) -> bool:
-        """Load available skills from skills.sh API."""
+        """Load available skills from local directory (metadata only)."""
         try:
-            logger.info("Loading skills from skills.sh marketplace...")
+            if not self.skills_dir.exists():
+                logger.info(f"Skills directory not found: {self.skills_dir}")
+                self.cache_loaded = True
+                return True
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.api_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self.skills_cache = data.get('skills', [])
-                        self.cache_loaded = True
-                        logger.info(f"Loaded {len(self.skills_cache)} skills from marketplace")
-                        return True
-                    else:
-                        logger.warning(f"Failed to load skills: HTTP {response.status}")
-                        return False
-        except asyncio.TimeoutError:
-            logger.warning("Timeout loading skills from marketplace")
-            return False
+            logger.info(f"Scanning local skills from {self.skills_dir}...")
+            self.skills_cache = []
+
+            # Scan for SKILL.md files
+            for skill_dir in self.skills_dir.iterdir():
+                if not skill_dir.is_dir():
+                    continue
+
+                skill_file = skill_dir / "SKILL.md"
+                if not skill_file.exists():
+                    continue
+
+                # Extract metadata only (first few lines)
+                metadata = self._extract_metadata(skill_file)
+                if metadata:
+                    self.skills_cache.append({
+                        'id': skill_dir.name,
+                        'name': skill_dir.name,
+                        'description': metadata.get('description', ''),
+                        'keywords': metadata.get('keywords', []),
+                        'path': str(skill_dir)
+                    })
+
+            self.cache_loaded = True
+            logger.info(f"Loaded {len(self.skills_cache)} local skills")
+            return True
+
         except Exception as e:
-            logger.error(f"Error loading skills: {e}")
+            logger.error(f"Error loading local skills: {e}")
+            self.cache_loaded = True  # Set to true to avoid retries
             return False
+
+    def _extract_metadata(self, skill_file: Path) -> Optional[Dict]:
+        """Extract metadata from SKILL.md frontmatter (fast read)."""
+        try:
+            with open(skill_file, 'r', encoding='utf-8') as f:
+                # Read only first 50 lines for metadata
+                lines = []
+                for _ in range(50):
+                    line = f.readline()
+                    if not line:
+                        break
+                    lines.append(line)
+
+            content = ''.join(lines)
+
+            # Quick parse of YAML frontmatter
+            if not content.startswith('---'):
+                return None
+
+            parts = content.split('---', 2)
+            if len(parts) < 2:
+                return None
+
+            # Simple key-value extraction (avoid full YAML parse for speed)
+            metadata = {}
+            for line in parts[1].split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip()
+                    value = value.strip().strip('"\'')
+                    if key in ['name', 'description', 'keywords']:
+                        metadata[key] = value
+
+            return metadata
+
+        except Exception as e:
+            logger.warning(f"Failed to extract metadata from {skill_file}: {e}")
+            return None
 
     def match_skills(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -67,6 +120,10 @@ class SkillMatcher:
             logger.warning("Skills cache not loaded")
             return []
 
+        if not self.skills_cache:
+            logger.debug("No local skills available")
+            return []
+
         query_lower = query.lower()
 
         # Extract keywords from query
@@ -80,13 +137,14 @@ class SkillMatcher:
                 scored_skills.append({
                     'id': skill['id'],
                     'name': skill['name'],
-                    'installs': skill.get('installs', 0),
-                    'source': skill.get('topSource', ''),
-                    'score': score
+                    'description': skill.get('description', ''),
+                    'path': skill.get('path', ''),
+                    'score': score,
+                    'source': 'local'  # Mark as local skill
                 })
 
-        # Sort by score (descending) and installs (descending)
-        scored_skills.sort(key=lambda x: (x['score'], x['installs']), reverse=True)
+        # Sort by score (descending)
+        scored_skills.sort(key=lambda x: x['score'], reverse=True)
 
         return scored_skills[:max_results]
 
@@ -133,15 +191,25 @@ class SkillMatcher:
         """Calculate relevance score for a skill."""
         score = 0.0
         skill_name = skill['name'].lower()
+        skill_desc = skill.get('description', '').lower()
 
         # Exact name match
         if query in skill_name or skill_name in query:
             score += 10.0
 
+        # Name substring match
+        query_words = query.split()
+        for word in query_words:
+            if len(word) > 3 and word in skill_name:
+                score += 3.0
+
         # Keyword matches in name
         for keyword in keywords:
             if keyword in skill_name:
                 score += 5.0
+            # Check in description too
+            if keyword in skill_desc:
+                score += 2.0
 
         # Special mappings for common mismatches
         keyword_to_skill = {
@@ -156,15 +224,6 @@ class SkillMatcher:
                 for skill_keyword in keyword_to_skill[keyword]:
                     if skill_keyword in skill_name:
                         score += 5.0
-
-        # Boost popular skills slightly
-        installs = skill.get('installs', 0)
-        if installs > 50000:
-            score += 2.0
-        elif installs > 20000:
-            score += 1.0
-        elif installs > 5000:
-            score += 0.5
 
         return score
 

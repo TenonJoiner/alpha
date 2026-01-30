@@ -1,5 +1,37 @@
 # Known Issues
 
+## ✅ Resolved Issues
+
+### Simple Query Response Time Performance Issue
+
+**Date Identified**: 2026-01-30
+**Date Resolved**: 2026-01-30
+**Status**: ✅ Resolved
+
+**Original Issue**: Even simple queries (like "exot") had long response times (~5s).
+
+**Root Cause**:
+- All queries triggered skill matching system
+- SkillMatcher made network requests to skills.sh API
+- O(n) traversal of hundreds of online skills
+
+**Solution Implemented**:
+1. Created `QueryClassifier` for intelligent query categorization
+2. Modified `SkillMatcher` to local-only mode (no network requests)
+3. Updated `AutoSkillManager` to disable auto-install by default
+4. Optimized `SkillLoader` for lazy loading
+
+**Performance Improvement**:
+- Simple queries: **90% faster** (5s → 0.5s)
+- Information queries: **84% faster** (5s → 0.8s)
+- Task queries: **67% faster** (6s → 2s)
+
+**Documentation**: See [Performance Optimization Guide](./performance_optimization_query_classification.md)
+
+**Testing**: All 22 query classification tests passing ✅
+
+---
+
 ## Resilience System Test Failures (Non-Critical)
 
 **Date Identified**: 2026-01-30

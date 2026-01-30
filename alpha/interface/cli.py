@@ -26,6 +26,7 @@ from alpha.skills.installer import SkillInstaller
 from alpha.skills.executor import SkillExecutor
 from alpha.skills import preinstall_builtin_skills
 from alpha.skills.auto_manager import AutoSkillManager
+from alpha.skills.query_classifier import QueryClassifier
 
 # Initialize logger and console early
 logger = logging.getLogger(__name__)
@@ -64,6 +65,9 @@ class CLI:
         self.auto_skill_manager = auto_skill_manager
         self.conversation_history: list[Message] = []
         self.config = config
+
+        # Initialize query classifier for smart skill matching
+        self.query_classifier = QueryClassifier()
 
         # Initialize Vector Memory (optional, with graceful fallback)
         self.vector_memory_enabled = False
@@ -254,10 +258,20 @@ IMPORTANT INSTRUCTIONS:
             content=user_input
         )
 
-        # Auto-skill: Try to match and load relevant skill
+        # Query classification: only match skills for task queries
+        should_match_skills = False
         if self.auto_skill_manager:
+            query_info = self.query_classifier.classify(user_input)
+            should_match_skills = query_info['needs_skill_matching']
+
+            logger.info(f"Query classified as: {query_info['type']} "
+                       f"(confidence: {query_info['confidence']:.2f}, "
+                       f"needs_skills: {should_match_skills})")
+
+        # Auto-skill: Try to match and load relevant skill (only for task queries)
+        if should_match_skills and self.auto_skill_manager:
             try:
-                console.print("[dim]Analyzing query for relevant skills...[/dim]")
+                console.print("[dim]Analyzing task for relevant skills...[/dim]")
                 skill_result = await self.auto_skill_manager.process_query(user_input)
 
                 if skill_result:
@@ -274,7 +288,7 @@ IMPORTANT INSTRUCTIONS:
 
                     logger.info(f"Auto-loaded skill: {skill_name} (score: {skill_score})")
                 else:
-                    logger.debug("No relevant skill found for query")
+                    logger.debug("No relevant local skills found for query")
 
             except Exception as e:
                 logger.warning(f"Auto-skill matching failed: {e}")
@@ -883,20 +897,23 @@ async def run_cli():
             auto_install=skill_config.get('auto_install', True)
         )
 
-        # Create auto-skill manager
+        # Create auto-skill manager (local-only mode for performance)
         auto_skill_config = skill_config.get('auto_skill', {})
         auto_skill_enabled = auto_skill_config.get('enabled', True)
 
         auto_skill_manager = None
         if auto_skill_enabled:
-            console.print("[blue]Initializing auto-skill system...[/blue]")
+            console.print("[blue]Initializing auto-skill system (local-only mode)...[/blue]")
             auto_skill_manager = AutoSkillManager(
-                auto_install=auto_skill_config.get('auto_install', True),
+                auto_install=False,  # Disabled for performance - local skills only
                 auto_load=auto_skill_config.get('auto_load', True)
             )
-            # Initialize (load skills cache)
+            # Initialize (load local skills cache)
             await auto_skill_manager.initialize()
-            console.print("[green]✓[/green] Auto-skill system ready")
+            skill_count = len(auto_skill_manager.matcher.skills_cache)
+            console.print(f"[green]✓[/green] Auto-skill system ready ({skill_count} local skills)")
+        else:
+            console.print("[dim]Auto-skill system disabled[/dim]")
 
         # Create and start CLI (with config for Vector Memory)
         cli = CLI(engine, llm_service, tool_registry, skill_executor, auto_skill_manager, config)
