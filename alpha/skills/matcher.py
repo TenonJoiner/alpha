@@ -23,7 +23,7 @@ class SkillMatcher:
     """
 
     def __init__(self, skills_dir: Path = None):
-        self.skills_dir = skills_dir or Path(".agents/skills")
+        self.skills_dir = skills_dir or Path("skills")
         self.skills_cache: List[Dict] = []
         self.cache_loaded = False
 

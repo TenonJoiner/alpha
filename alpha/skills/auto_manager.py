@@ -41,7 +41,7 @@ class AutoSkillManager:
             auto_install: Automatically install missing skills (disabled for performance)
             auto_load: Automatically load skill context
         """
-        self.skills_dir = skills_dir or Path(".agents/skills")
+        self.skills_dir = skills_dir or Path("skills")
         self.auto_install = auto_install
         self.auto_load = auto_load
 

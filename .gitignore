@@ -38,11 +38,9 @@ build/
 # Claude Code
 .claude/
 
-# Agent Skills
-# Keep skills directory structure but ignore downloaded cache
-.agents/cache/
-.agents/temp/
-# Note: .agents/skills/ is tracked in git for portability
+# Agent Skills - cache and temp files only
+skills/.cache/
+skills/.temp/
 
 # Test files
 test_custom_client.py

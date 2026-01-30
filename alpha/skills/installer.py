@@ -29,8 +29,8 @@ class SkillInstaller:
     """
 
     def __init__(self, skills_dir: Optional[Path] = None):
-        # Use project-local skills directory for portability
-        self.skills_dir = skills_dir or Path(".agents/skills")
+        # Use project-local skills directory (non-hidden for visibility)
+        self.skills_dir = skills_dir or Path("skills")
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
     async def install(

@@ -27,7 +27,7 @@ class SkillLoader:
     """
 
     def __init__(self, skills_dir: Path = None):
-        self.skills_dir = skills_dir or Path(".agents/skills")
+        self.skills_dir = skills_dir or Path("skills")
 
     def load_skill(self, skill_name: str) -> Optional[Dict[str, any]]:
         """

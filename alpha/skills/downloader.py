@@ -25,7 +25,7 @@ class SkillDownloader:
     """
 
     def __init__(self, skills_dir: Path = None):
-        self.skills_dir = skills_dir or Path(".agents/skills")
+        self.skills_dir = skills_dir or Path("skills")
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
     def is_installed(self, skill_name: str) -> bool:

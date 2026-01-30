@@ -2,7 +2,7 @@
 """
 Install Top 50 Most Popular Skills from skills.sh
 
-Downloads the top 50 most installed skills to .agents/skills/
+Downloads the top 50 most installed skills to skills/
 """
 
 import asyncio
@@ -53,7 +53,7 @@ async def install_skill(skill_name, source, index, total):
 
     try:
         # Check if already installed
-        skill_path = Path(f".agents/skills/{skill_name}")
+        skill_path = Path(f"skills/{skill_name}")
         if skill_path.exists() and (skill_path / "SKILL.md").exists():
             logger.info(f"  ✓ Already installed: {skill_name}")
             return True
@@ -114,7 +114,7 @@ async def main():
     # Confirm installation
     if not auto_yes:
         try:
-            response = input(f"Install top 50 skills to .agents/skills/? (y/n): ").strip().lower()
+            response = input(f"Install top 50 skills to skills/? (y/n): ").strip().lower()
             if response != 'y':
                 print("Installation cancelled.")
                 sys.exit(0)
@@ -157,12 +157,12 @@ async def main():
     print(f"✓ Successfully installed: {success_count}")
     print(f"✗ Failed: {failed_count}")
     print(f"⊘ Skipped: {skipped_count}")
-    print(f"📂 Skills directory: {Path('.agents/skills').absolute()}")
+    print(f"📂 Skills directory: {Path('skills').absolute()}")
     print()
     print("Next steps:")
     print("  1. Run 'npx skills list' to verify installations")
     print("  2. Run './start.sh' to start Alpha")
-    print("  3. Commit to git: git add .agents/skills && git commit -m 'Add top 50 skills'")
+    print("  3. Commit to git: git add skills && git commit -m 'Add top 50 skills'")
     print()
 
 
