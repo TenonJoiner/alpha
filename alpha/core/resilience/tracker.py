@@ -244,6 +244,7 @@ class ProgressTracker:
             "status": task.status,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "result": task.result,
             "total_cost": task.total_cost,
             "attempts": [
                 {
@@ -289,6 +290,7 @@ class ProgressTracker:
             attempts=attempts,
             started_at=datetime.fromisoformat(state_dict["started_at"]) if state_dict.get("started_at") else None,
             completed_at=datetime.fromisoformat(state_dict["completed_at"]) if state_dict.get("completed_at") else None,
+            result=state_dict.get("result"),
             total_cost=state_dict.get("total_cost", 0.0)
         )
 

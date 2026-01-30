@@ -209,7 +209,7 @@ class FailureAnalyzer:
 
         # Check for multiple different errors on same operation
         operations = [f.operation for f in failures]
-        if len(set(operations)) == 1 and len(error_counter) > 2:
+        if len(set(operations)) == 1 and len(error_counter) >= 2:
             return FailurePattern.UNSTABLE_SERVICE
 
         # Check for cascading failures

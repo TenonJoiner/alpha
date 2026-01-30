@@ -346,6 +346,9 @@ class ResilienceEngine:
                 logger.warning(f"Max total time exceeded: {self.config.max_total_time}s")
                 break
 
+            # Reset circuit breaker for each new strategy
+            self.retry_strategy.circuit_breaker.reset()
+
             strategies_tried.append(strategy.name)
             logger.info(f"Trying strategy: {strategy.name} - {strategy.description}")
 

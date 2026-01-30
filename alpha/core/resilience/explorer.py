@@ -360,11 +360,16 @@ class AlternativeExplorer:
             cost_factor = 1.0 / (cost + 0.001)
             time_factor = 1.0 / (time_estimate + 0.1)
 
+            # Normalize cost and time factors to be in similar range as priority (0-1)
+            # Max cost_factor is 1000 when cost=0.001, normalize to 0-1 range
+            normalized_cost = min(1.0, cost_factor / 1000.0)
+            normalized_time = min(1.0, time_factor / 10.0)
+
             score = (
-                (base_priority * 0.3) +
-                (success_rate * 0.4) +
-                (cost_factor * 0.15) +
-                (time_factor * 0.15)
+                (base_priority * 0.4) +
+                (success_rate * 0.3) +
+                (normalized_cost * 0.15) +
+                (normalized_time * 0.15)
             )
 
         return score
