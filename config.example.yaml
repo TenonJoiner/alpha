@@ -40,6 +40,25 @@ memory:
   database: "data/alpha.db"
   vector_db: "data/vectors"
 
+# Vector Memory System (Phase 2.3 - Semantic Search & Long-Term Memory)
+vector_memory:
+  enabled: true
+  provider: "local"  # openai, anthropic, local
+  model: null  # Model name (provider-specific, null for defaults)
+  persist_directory: "data/vector_memory"
+  max_context_tokens: 4000
+
+  # Context retrieval settings
+  retrieval:
+    max_conversations: 5
+    max_knowledge_entries: 3
+    time_window_days: 30
+
+  # Conversation cleanup
+  cleanup:
+    enabled: true
+    older_than_days: 90
+
 tools:
   enabled:
     - shell

@@ -43,10 +43,12 @@ class LLMConfig:
 class VectorMemoryConfig:
     """Vector memory configuration."""
     enabled: bool = False
-    embedding_provider: str = "openai"
-    embedding_model: str = "text-embedding-3-small"
+    provider: str = "local"  # openai, anthropic, local
+    model: str = None
+    persist_directory: str = "data/vector_memory"
     max_context_tokens: int = 4000
-    persist_directory: str = "data/vectors"
+    retrieval: Dict = None
+    cleanup: Dict = None
 
 
 @dataclass
@@ -82,6 +84,7 @@ class Config:
     memory: MemoryConfig
     tools: ToolsConfig
     interface: InterfaceConfig
+    vector_memory: VectorMemoryConfig = None
 
 
 def load_config(config_path: str = "config.yaml") -> Config:
@@ -113,6 +116,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
     memory_config = raw_config.get('memory', {})
     tools_config = raw_config.get('tools', {})
     interface_config = raw_config.get('interface', {})
+    vector_memory_config = raw_config.get('vector_memory', {})
 
     # Build LLM providers
     providers = {}
@@ -136,16 +140,29 @@ def load_config(config_path: str = "config.yaml") -> Config:
         else:
             providers[name] = LLMProviderConfig(**provider_data)
 
-    # Parse vector memory configuration if present
+    # Parse vector memory configuration
     vector_memory_cfg = None
-    if 'vector_memory' in memory_config:
+    if vector_memory_config:
+        vector_memory_cfg = VectorMemoryConfig(
+            enabled=vector_memory_config.get('enabled', False),
+            provider=vector_memory_config.get('provider', 'local'),
+            model=vector_memory_config.get('model'),
+            persist_directory=vector_memory_config.get('persist_directory', 'data/vector_memory'),
+            max_context_tokens=vector_memory_config.get('max_context_tokens', 4000),
+            retrieval=vector_memory_config.get('retrieval', {}),
+            cleanup=vector_memory_config.get('cleanup', {})
+        )
+    # Legacy support: check memory.vector_memory for backward compatibility
+    elif 'vector_memory' in memory_config:
         vm_data = memory_config['vector_memory']
         vector_memory_cfg = VectorMemoryConfig(
             enabled=vm_data.get('enabled', False),
-            embedding_provider=vm_data.get('embedding_provider', 'openai'),
-            embedding_model=vm_data.get('embedding_model', 'text-embedding-3-small'),
+            provider=vm_data.get('provider', 'local'),
+            model=vm_data.get('model'),
+            persist_directory=vm_data.get('persist_directory', 'data/vector_memory'),
             max_context_tokens=vm_data.get('max_context_tokens', 4000),
-            persist_directory=vm_data.get('persist_directory', 'data/vectors')
+            retrieval=vm_data.get('retrieval', {}),
+            cleanup=vm_data.get('cleanup', {})
         )
 
     # Build memory config (excluding vector_memory dict to avoid duplication)
@@ -166,7 +183,8 @@ def load_config(config_path: str = "config.yaml") -> Config:
             api_enabled=interface_config.get('api', {}).get('enabled', False),
             api_host=interface_config.get('api', {}).get('host', '0.0.0.0'),
             api_port=interface_config.get('api', {}).get('port', 8000)
-        )
+        ),
+        vector_memory=vector_memory_cfg
     )
 
 

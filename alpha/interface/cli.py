@@ -27,6 +27,20 @@ from alpha.skills.executor import SkillExecutor
 from alpha.skills import preinstall_builtin_skills
 from alpha.skills.auto_manager import AutoSkillManager
 
+# Vector Memory imports (optional - graceful fallback if unavailable)
+try:
+    from alpha.vector_memory import (
+        VectorStore,
+        EmbeddingService,
+        KnowledgeBase,
+        ContextRetriever
+    )
+    from alpha.vector_memory.embeddings import ChromaEmbeddingFunction
+    VECTOR_MEMORY_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Vector Memory not available: {e}")
+    VECTOR_MEMORY_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 console = Console()
 
@@ -41,13 +55,25 @@ class CLI:
     - Status display
     """
 
-    def __init__(self, engine: AlphaEngine, llm_service: LLMService, tool_registry, skill_executor: SkillExecutor = None, auto_skill_manager: AutoSkillManager = None):
+    def __init__(self, engine: AlphaEngine, llm_service: LLMService, tool_registry, skill_executor: SkillExecutor = None, auto_skill_manager: AutoSkillManager = None, config=None):
         self.engine = engine
         self.llm_service = llm_service
         self.tool_registry = tool_registry
         self.skill_executor = skill_executor
         self.auto_skill_manager = auto_skill_manager
         self.conversation_history: list[Message] = []
+        self.config = config
+
+        # Initialize Vector Memory (optional, with graceful fallback)
+        self.vector_memory_enabled = False
+        self.vector_store = None
+        self.embedding_service = None
+        self.knowledge_base = None
+        self.context_retriever = None
+
+        if VECTOR_MEMORY_AVAILABLE and config and hasattr(config, 'vector_memory'):
+            self._initialize_vector_memory(config.vector_memory)
+
 
         # System prompt
         self.system_prompt = """You are Alpha, a Personal Super AI Assistant.
@@ -211,6 +237,16 @@ IMPORTANT INSTRUCTIONS:
         user_msg = Message(role="user", content=user_input)
         self.conversation_history.append(user_msg)
 
+        # Add to vector memory for future retrieval
+        if self.vector_memory_enabled:
+            await self._add_to_vector_memory(user_input, role="user")
+
+        # Retrieve relevant context from previous conversations
+        if self.vector_memory_enabled:
+            relevant_context = await self._retrieve_relevant_context(user_input, n_results=3)
+            if relevant_context:
+                self._inject_context_into_conversation(relevant_context)
+
         # Record in memory
         await self.engine.memory_manager.add_conversation(
             role="user",
@@ -307,6 +343,10 @@ IMPORTANT INSTRUCTIONS:
                     assistant_msg = Message(role="assistant", content=response_text)
                     self.conversation_history.append(assistant_msg)
 
+                    # Add to vector memory
+                    if self.vector_memory_enabled:
+                        await self._add_to_vector_memory(response_text, role="assistant")
+
                     # Record in memory
                     await self.engine.memory_manager.add_conversation(
                         role="assistant",
@@ -323,6 +363,120 @@ IMPORTANT INSTRUCTIONS:
 
         if iteration >= max_iterations:
             console.print(f"\n[yellow]Warning: Maximum tool iterations reached[/yellow]")
+
+    def _initialize_vector_memory(self, vm_config):
+        """
+        Initialize Vector Memory system.
+
+        Args:
+            vm_config: VectorMemoryConfig instance
+        """
+        if not vm_config or not vm_config.enabled:
+            logger.info("Vector Memory disabled in configuration")
+            return
+
+        try:
+            # Initialize embedding service
+            self.embedding_service = EmbeddingService(
+                provider=vm_config.provider or 'local',
+                model=vm_config.model
+            )
+
+            # Create embedding function for ChromaDB
+            embedding_function = ChromaEmbeddingFunction(self.embedding_service)
+
+            # Initialize vector store
+            self.vector_store = VectorStore(
+                persist_directory=vm_config.persist_directory,
+                embedding_function=embedding_function
+            )
+
+            # Initialize knowledge base
+            self.knowledge_base = KnowledgeBase(
+                vector_store=self.vector_store,
+                embedding_service=self.embedding_service
+            )
+
+            # Initialize context retriever
+            self.context_retriever = ContextRetriever(
+                vector_store=self.vector_store,
+                embedding_service=self.embedding_service,
+                max_context_tokens=vm_config.max_context_tokens
+            )
+
+            self.vector_memory_enabled = True
+            console.print("[green]✓ Vector Memory initialized[/green]")
+            logger.info("Vector Memory initialized successfully")
+
+        except Exception as e:
+            logger.warning(f"Vector Memory initialization failed: {e}")
+            logger.info("Continuing without semantic search capabilities")
+            self.vector_memory_enabled = False
+
+    async def _add_to_vector_memory(self, content: str, role: str):
+        """
+        Add message to vector memory.
+
+        Args:
+            content: Message content
+            role: Message role (user/assistant/system)
+        """
+        if not self.vector_memory_enabled:
+            return
+
+        try:
+            self.context_retriever.add_conversation(
+                role=role,
+                content=content,
+                metadata={'timestamp': str(asyncio.get_event_loop().time())}
+            )
+        except Exception as e:
+            logger.error(f"Failed to add to vector memory: {e}")
+
+    async def _retrieve_relevant_context(self, query: str, n_results: int = 3) -> str:
+        """
+        Retrieve relevant context for query.
+
+        Args:
+            query: Search query
+            n_results: Number of results to retrieve
+
+        Returns:
+            Formatted context string or None
+        """
+        if not self.vector_memory_enabled:
+            return None
+
+        try:
+            context = self.context_retriever.build_context(
+                query=query,
+                n_conversations=n_results,
+                n_knowledge=2
+            )
+            return context if context.strip() else None
+        except Exception as e:
+            logger.error(f"Failed to retrieve context: {e}")
+            return None
+
+    def _inject_context_into_conversation(self, context: str):
+        """
+        Inject retrieved context into conversation history.
+
+        Args:
+            context: Context to inject
+        """
+        if not context or not context.strip():
+            return
+
+        context_msg = Message(
+            role="system",
+            content=f"Relevant context from previous conversations:\n{context}"
+        )
+        # Insert before last user message (if exists)
+        if self.conversation_history:
+            self.conversation_history.insert(-1, context_msg)
+        else:
+            self.conversation_history.append(context_msg)
 
     def _parse_tool_calls(self, response: str) -> list:
         """Parse tool and skill calls from response."""
@@ -743,8 +897,8 @@ async def run_cli():
             await auto_skill_manager.initialize()
             console.print("[green]✓[/green] Auto-skill system ready")
 
-        # Create and start CLI
-        cli = CLI(engine, llm_service, tool_registry, skill_executor, auto_skill_manager)
+        # Create and start CLI (with config for Vector Memory)
+        cli = CLI(engine, llm_service, tool_registry, skill_executor, auto_skill_manager, config)
 
         # Start engine in background
         engine_task = asyncio.create_task(engine.run())
