@@ -95,6 +95,22 @@ Alpha is equipped with a **versatile toolkit** and the ability to **create custo
 
 - **Intelligent Agent Skill Discovery & Integration**: **Automatically identify, discover, and integrate suitable Agent Skills** from available repositories or marketplaces when facing tasks that require specialized capabilities. Alpha can **autonomously search for relevant skills**, evaluate their suitability based on task requirements, **download and install them seamlessly**, and incorporate them into its toolkit—**all without user intervention**. This ensures continuous capability expansion and adaptation to diverse task scenarios.
 
+- **Autonomous Skill Library Evolution**: Alpha possesses a **self-directed learning and evolution capability**, enabling it to **proactively explore, acquire, and optimize its skill repertoire** over time:
+
+  - **Proactive Skill Exploration**: **Continuously scan and monitor** available Agent Skill repositories, marketplaces, and community resources to **discover new and emerging skills** that could enhance Alpha's capabilities—even before encountering tasks that explicitly require them. This proactive exploration ensures Alpha stays ahead of user needs.
+
+  - **Intelligent Skill Evaluation & Selection**: **Autonomously assess discovered skills** based on multiple criteria including: **utility value** (potential to solve common or valuable tasks), **quality indicators** (user ratings, maintenance status, documentation quality), **compatibility** (integration with existing skills and tools), and **cost-effectiveness** (performance vs. resource consumption). Select and acquire skills that offer the highest strategic value.
+
+  - **Dynamic Skill Library Management**: Maintain an **organized, searchable skill library** with metadata tracking for each skill, including: **acquisition date, usage frequency, success rate, performance metrics, dependencies, and use cases**. Regularly review and **prune underutilized or redundant skills** to keep the library lean and efficient.
+
+  - **Skill Combination Optimization**: **Experiment with combining multiple skills** to solve complex tasks more effectively. Identify synergistic skill combinations that work well together and **prioritize these combinations** in future task planning. Learn which skill sequences or parallel skill applications yield the best results.
+
+  - **Performance-Driven Skill Prioritization**: Track the **effectiveness of each skill across different task scenarios** and continuously refine skill selection strategies. **Promote high-performing skills** to preferred status for relevant task types, while **deprecating or replacing skills** that consistently underperform or have been superseded by better alternatives.
+
+  - **Adaptive Skill Learning**: When a newly acquired skill is used, **analyze its execution patterns, parameters, and outcomes** to build expertise in optimal skill usage. **Learn from both successes and failures**, refining how and when to apply each skill for maximum effectiveness.
+
+  - **Continuous Capability Evolution**: Through this autonomous skill management cycle—**discover → evaluate → acquire → deploy → measure → optimize → prune**—Alpha's capabilities **continuously evolve and improve** over time, ensuring it remains at the cutting edge of agent technology without requiring manual intervention or updates.
+
 ## Memory & Personalization
 
 Alpha builds a **deep, personalized relationship with users** through **robust memory and context retention**, making every interaction feel tailored to the individual:
@@ -107,9 +123,19 @@ Alpha builds a **deep, personalized relationship with users** through **robust m
 
 Alpha is not static—it **evolves over time**, learning from its experiences to become more efficient and effective:
 
-- **Complete Execution Logging**: Maintain a **detailed, searchable log of all task execution processes**, including steps taken, tools used, code generated, errors encountered, and solutions implemented. This log is **for Alpha's self-improvement (not user display)** and can be accessed by the user only if requested.
+- **Complete Execution Logging**: Maintain a **detailed, searchable log of all task execution processes**, including steps taken, tools used, **skills employed**, code generated, errors encountered, and solutions implemented. This log is **for Alpha's self-improvement (not user display)** and can be accessed by the user only if requested.
 
-- **Self-Summarization & Continuous Improvement**: **Regularly** (after completing tasks or at set intervals) **summarize its execution logs** to identify inefficiencies, mistakes, or areas for improvement. Use these summaries to **refine its reasoning logic, task execution strategies, tool selection, and code generation capabilities**—ensuring it becomes **more intelligent and reliable over time**.
+- **Self-Summarization & Continuous Improvement**: **Regularly** (after completing tasks or at set intervals) **summarize its execution logs** to identify inefficiencies, mistakes, or areas for improvement. Use these summaries to **refine its reasoning logic, task execution strategies, tool selection, skill usage patterns, and code generation capabilities**—ensuring it becomes **more intelligent and reliable over time**.
+
+- **Skill Library Performance Analysis**: As part of the self-improvement cycle, **regularly analyze the performance of the entire skill library** by reviewing:
+  - **Skill utilization statistics** (which skills are used most frequently vs. which remain dormant)
+  - **Task success correlation** (which skills contribute most to successful task completion)
+  - **Skill acquisition ROI** (whether newly acquired skills deliver value proportional to their cost/complexity)
+  - **Skill gap identification** (what types of tasks consistently require custom code due to lack of appropriate skills)
+
+  Use these analyses to **guide future skill exploration and acquisition priorities**, ensuring the skill library evolves in alignment with actual usage patterns and emerging needs.
+
+- **Evolutionary Learning Loop**: Integrate all improvement dimensions—execution logs, skill performance, user feedback, and task outcomes—into a **unified learning loop** that continuously refines Alpha's capabilities. This loop ensures that every task completed, every skill used, and every interaction contributes to making Alpha **progressively more capable, efficient, and aligned with user needs**.
 
 ---
 
@@ -178,6 +204,74 @@ To ensure development quality, standardize the development process, and guarante
 - **End-to-End Testing & Verification Requirements**: **All new features, feature optimizations, and code modifications must undergo end-to-end complete testing and verification** to ensure there are no vulnerabilities or abnormalities before proceeding to subsequent links. The specific requirements are as follows:
 
   - **Testing Framework & Test Cases**: **Independently design a CLI-interactive testing framework** with reusability and extensibility. At the same time, develop a **comprehensive set of interactive test cases** covering **normal functional scenarios, abnormal scenarios, and boundary scenarios** to ensure test comprehensiveness. **Conduct end-to-end testing strictly in accordance with the test cases**.
+
+  - **Agent Benchmark Testing Requirements**: **Implement industry-standard Agent benchmark testing** to evaluate Alpha's capabilities across different task complexity levels and ensure competitive performance. The benchmark testing system must include:
+
+    - **Multi-Dimensional Benchmark Framework**: Design and implement a comprehensive benchmark framework inspired by industry best practices (AgentBench, GAIA, τ-Bench, SWE-bench) that evaluates Alpha across multiple dimensions:
+      - **Task Completion Success Rate**: Measure the percentage of successfully completed tasks across different complexity levels
+      - **Reasoning & Planning Capability**: Evaluate multi-step reasoning, task decomposition, and execution planning
+      - **Tool Use Proficiency**: Assess effective usage of available tools (shell, file operations, HTTP, search, etc.)
+      - **Cost-Performance Optimization**: Track API costs vs. task completion quality across different model selections
+      - **Response Latency**: Measure time from task input to completion (simple: ≤1s, medium: ≤10s, complex: ≤60s)
+      - **Error Recovery & Resilience**: Evaluate the ability to handle failures and find alternative solutions ("never give up" principle)
+      - **Multi-Step Task Consistency**: Test capability to maintain context and state across long-running, multi-step tasks
+
+    - **Task Complexity Stratification**: Create benchmark test suites organized by complexity levels, aligned with GAIA benchmark methodology:
+      - **Level 1 (Simple Tasks)**: Single-step or few-step tasks requiring minimal reasoning and 1-2 tool uses
+        - Examples: File operations, simple calculations, basic information retrieval, direct command execution
+        - Expected success rate: ≥95%, Response time: ≤1 second
+      - **Level 2 (Medium Tasks)**: Multi-step tasks requiring moderate reasoning with 3-5 tool uses and basic planning
+        - Examples: Multi-file operations, data processing pipelines, scheduled task setup, API integrations
+        - Expected success rate: ≥85%, Response time: ≤10 seconds
+      - **Level 3 (Complex Tasks)**: Advanced multi-step tasks requiring sophisticated reasoning with 6-10 tool uses and detailed planning
+        - Examples: Code generation with testing, complex data analysis, multi-API orchestration, troubleshooting
+        - Expected success rate: ≥70%, Response time: ≤60 seconds
+      - **Level 4 (Expert Tasks)**: Long-running, highly complex tasks requiring deep reasoning, 10+ tool uses, adaptive replanning
+        - Examples: End-to-end feature development, complex debugging, system integration, autonomous problem-solving
+        - Expected success rate: ≥50%, Response time: ≤300 seconds
+
+    - **Real-World Task Scenarios**: Include diverse, realistic task scenarios covering Alpha's core capabilities:
+      - **File & System Management**: Create, read, modify, organize files; execute shell commands; manage processes
+      - **Data Processing & Analysis**: Parse data formats (JSON, CSV, YAML); perform calculations; generate reports
+      - **Web & API Interactions**: Make HTTP requests; parse responses; handle authentication; error handling
+      - **Information Retrieval**: Web search; extract specific information; summarize findings
+      - **Code Generation & Execution**: Write scripts; execute code; debug errors; optimize performance
+      - **Task Scheduling & Automation**: Create scheduled tasks; handle recurring operations; manage dependencies
+      - **Agent Skills Integration**: Discover relevant skills; auto-install; execute skill operations; handle failures
+      - **Multi-Model Selection**: Automatically route tasks to appropriate models based on complexity and cost
+
+    - **Automated Benchmark Execution**: Implement automated benchmark runner that:
+      - Executes all benchmark tests with consistent environment setup
+      - Captures detailed execution logs, metrics, and results
+      - Supports parallel test execution for efficiency
+      - Provides progress reporting and real-time feedback
+      - Handles test failures gracefully with detailed error reporting
+      - Generates structured output (JSON/YAML) for analysis
+
+    - **Performance Metrics & Scoring**: Define clear, quantifiable metrics for evaluation:
+      - **Success Rate**: Percentage of tasks completed successfully without errors
+      - **Partial Success Rate**: Percentage of tasks completed with minor issues or suboptimal results
+      - **Average Response Time**: Mean time to task completion per complexity level
+      - **Cost Efficiency**: Average API cost per task / per complexity level
+      - **Tool Usage Accuracy**: Percentage of correct tool selections and parameters
+      - **Error Recovery Rate**: Percentage of failed approaches that led to successful alternative solutions
+      - **Overall Benchmark Score**: Weighted composite score (0-100) considering all dimensions
+
+    - **Benchmark Reporting & Analysis**: Generate comprehensive reports including:
+      - Overall performance summary with scores across all dimensions
+      - Detailed breakdown by task complexity level
+      - Success/failure analysis with specific task examples
+      - Performance trends and comparison with baseline
+      - Cost analysis and model selection effectiveness
+      - Identified weaknesses and improvement recommendations
+      - Visual charts and graphs for key metrics
+
+    - **Continuous Benchmark Integration**: Integrate benchmark testing into development workflow:
+      - Run benchmark suite after major feature additions or changes
+      - Track performance trends across versions
+      - Establish performance regression alerts
+      - Use benchmark results to guide optimization priorities
+      - Maintain benchmark test suite as product evolves
 
   - **Testing Environment & Information Security**: During the testing process, **must use the configured LLM account environment variables**, and it is **strictly prohibited to modify the environment configuration without authorization**. Under no circumstances shall **account information (including keys, account passwords, etc.) be recorded in any files, logs, or code** to ensure the security of account information.
 

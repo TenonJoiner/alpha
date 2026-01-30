@@ -44,3 +44,4 @@ build/
 # Test files
 test_custom_client.py
 test_reports/
+tests/benchmarks/reports/
