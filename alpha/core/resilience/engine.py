@@ -14,6 +14,8 @@ from datetime import datetime, timedelta
 
 from .retry import RetryStrategy, RetryConfig, RetryResult, ErrorType
 from .analyzer import FailureAnalyzer, FailurePattern, FailureAnalysis
+from .tracker import ProgressTracker
+from .creative import CreativeSolver, CreativeSolution, SolutionType
 
 logger = logging.getLogger(__name__)
 
@@ -111,9 +113,9 @@ class ResilienceResult:
     total_time: float = 0.0
     total_cost: float = 0.0
     failure_analysis: Optional[FailureAnalysis] = None
-    creative_solution: Optional[Any] = None
+    creative_solution: Optional[CreativeSolution] = None
     recommendations: List[str] = field(default_factory=list)
-    resource_usage: Optional[Any] = None
+    resource_usage: Optional[Dict] = None
     escalation_needed: bool = False
 
 
@@ -124,13 +126,20 @@ class ResilienceEngine:
     Orchestrates:
     - RetryStrategy: Intelligent retry with exponential backoff
     - FailureAnalyzer: Pattern recognition and root cause analysis
-    - AlternativeExplorer: Multiple solution path exploration (future)
-    - CreativeSolver: Creative workaround generation (future)
-    - ProgressTracker: State management and metrics (future)
+    - ProgressTracker: State management and metrics tracking
+    - CreativeSolver: Creative workaround generation
+
+    The engine implements a multi-tiered approach:
+    1. Try with RetryStrategy (exponential backoff)
+    2. If fails, analyze with FailureAnalyzer
+    3. If pattern detected, try CreativeSolver for workarounds
+    4. Track all progress with ProgressTracker
+    5. Escalate to user if all strategies exhausted
 
     Usage:
         config = ResilienceConfig(max_attempts=5)
-        engine = ResilienceEngine(config)
+        engine = ResilienceEngine(config, llm_service=llm_service)
+
         result = await engine.execute(my_func, arg1, arg2, kwarg=value)
 
         if result.success:
@@ -140,16 +149,25 @@ class ResilienceEngine:
             print(f"Recommendations: {result.recommendations}")
     """
 
-    def __init__(self, config: Optional[ResilienceConfig] = None):
+    def __init__(
+        self,
+        config: Optional[ResilienceConfig] = None,
+        llm_service: Optional[Any] = None,
+        memory_manager: Optional[Any] = None
+    ):
         """
         Initialize resilience engine.
 
         Args:
             config: Resilience configuration (uses defaults if None)
+            llm_service: LLM service for creative solving
+            memory_manager: Memory manager for state persistence
         """
         self.config = config or ResilienceConfig()
+        self.llm_service = llm_service
+        self.memory_manager = memory_manager
 
-        # Initialize components
+        # Initialize core components
         retry_config = RetryConfig(
             max_attempts=self.config.max_attempts,
             base_delay=self.config.base_delay,
@@ -161,6 +179,20 @@ class ResilienceEngine:
         self.failure_analyzer = FailureAnalyzer(
             pattern_threshold=self.config.pattern_detection_threshold
         )
+
+        # Creative solver (if enabled)
+        if self.config.enable_creative_solving:
+            self.creative_solver = CreativeSolver(
+                llm_service=llm_service,
+                provider=self.config.creative_solver_provider
+            )
+        else:
+            self.creative_solver = None
+
+        # Tracking
+        self.total_attempts = 0
+        self.total_cost = 0.0
+        self.start_time: Optional[datetime] = None
 
         logger.info(f"ResilienceEngine initialized with config: {self.config}")
 
@@ -522,8 +554,32 @@ class ResilienceEngine:
         """
         return self.failure_analyzer.get_failure_summary()
 
+    def get_stats(self) -> Dict:
+        """
+        Get engine statistics.
+
+        Returns:
+            Dictionary with execution statistics
+        """
+        return {
+            'total_attempts': self.total_attempts,
+            'total_cost': self.total_cost,
+            'failure_summary': self.get_failure_summary(),
+            'creative_solver_enabled': self.creative_solver is not None,
+            'config': {
+                'max_attempts': self.config.max_attempts,
+                'enable_creative_solving': self.config.enable_creative_solving,
+                'enable_progress_tracking': self.config.enable_progress_tracking
+            }
+        }
+
     def reset(self):
         """Reset resilience engine state"""
         self.retry_strategy.reset()
         self.failure_analyzer.clear_history()
+        if self.creative_solver:
+            self.creative_solver.clear_history()
+        self.total_attempts = 0
+        self.total_cost = 0.0
+        self.start_time = None
         logger.info("ResilienceEngine state reset")

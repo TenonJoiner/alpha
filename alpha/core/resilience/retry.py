@@ -142,6 +142,12 @@ class RetryStrategy:
         error_str = str(error).lower()
         error_type_name = type(error).__name__.lower()
 
+        # Server errors (check first before generic timeout)
+        if any(keyword in error_str for keyword in
+               ['500 ', '502 ', '503 ', '504 ', 'internal server error', 'bad gateway',
+                'service unavailable', 'gateway timeout']):
+            return ErrorType.SERVER_ERROR
+
         # Network errors
         if any(keyword in error_str for keyword in
                ['connection', 'timeout', 'dns', 'network', 'unreachable']):
