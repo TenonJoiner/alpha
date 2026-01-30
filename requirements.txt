@@ -31,3 +31,9 @@ voyageai>=0.2.0  # Optional: for Anthropic/Voyage embeddings
 
 # Self-Monitoring System (Phase 2 - REQ-2.4)
 psutil>=5.9.0  # System metrics collection
+
+# Web API Server (Phase 3 - REQ-3.4)
+fastapi>=0.109.0  # Modern web framework
+uvicorn[standard]>=0.27.0  # ASGI server
+pydantic>=2.5.0  # Data validation
+python-multipart>=0.0.6  # File upload support
