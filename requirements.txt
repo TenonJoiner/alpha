@@ -28,3 +28,6 @@ pydantic>=2.5.0
 
 # Code Execution System (Phase 4.1 - REQ-4.1, 4.2, 4.3)
 docker>=7.0.0  # Docker SDK for Python (sandboxed execution)
+
+# Browser Automation System (Phase 4.3 - REQ-4.5)
+playwright>=1.40.0  # Browser automation framework
