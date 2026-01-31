@@ -203,7 +203,7 @@ class TestCodeExecutor:
         mock_validator.validate_syntax.side_effect = validation_side_effect
 
         options = ExecutionOptions(
-            generate_code=False,
+            generate_code=True,  # Enable code generation/refinement for retry
             max_retries=2,
             require_approval=False
         )
