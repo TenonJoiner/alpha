@@ -1,0 +1,66 @@
+name: "Data Processing Pipeline"
+version: "1.0.0"
+description: "Fetch, transform, analyze, and store data"
+author: "Alpha"
+tags: ["data", "etl", "processing"]
+parameters:
+  data_source:
+    type: string
+    default: "https://api.example.com/data"
+    description: "Data source URL"
+  output_file:
+    type: string
+    default: "./data/processed.json"
+    description: "Output file path"
+triggers:
+  - type: manual
+  - type: schedule
+    cron: "0 */6 * * *"  # Every 6 hours
+steps:
+  - id: fetch_data
+    tool: http
+    action: request
+    parameters:
+      url: "{{data_source}}"
+      method: "GET"
+    on_error: retry
+    retry:
+      max_attempts: 3
+      backoff: exponential
+
+  - id: save_raw
+    tool: file
+    action: write
+    parameters:
+      path: "./data/raw_data.json"
+      content: "{{fetch_data.response}}"
+    on_error: log_and_continue
+
+  - id: validate_data
+    tool: shell
+    action: execute
+    parameters:
+      command: "python scripts/validate_data.py ./data/raw_data.json"
+    on_error: abort
+
+  - id: transform_data
+    tool: shell
+    action: execute
+    parameters:
+      command: "python scripts/transform_data.py ./data/raw_data.json {{output_file}}"
+    on_error: retry
+    retry:
+      max_attempts: 2
+      backoff: linear
+
+  - id: analyze
+    tool: shell
+    action: execute
+    parameters:
+      command: "python scripts/analyze_data.py {{output_file}}"
+    on_error: log_and_continue
+
+outputs:
+  processed_file: "{{output_file}}"
+  record_count: "{{analyze.output}}"
+  processing_time: "{{workflow_duration}}"

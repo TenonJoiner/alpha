@@ -1,0 +1,71 @@
+name: "Deploy Pipeline"
+version: "1.0.0"
+description: "Complete deployment pipeline: pull, test, build, deploy"
+author: "Alpha"
+tags: ["deployment", "ci/cd", "pipeline"]
+parameters:
+  branch:
+    type: string
+    default: "main"
+    description: "Git branch to deploy"
+  environment:
+    type: string
+    default: "staging"
+    description: "Target deployment environment"
+  skip_tests:
+    type: boolean
+    default: false
+    description: "Skip testing phase"
+triggers:
+  - type: manual
+steps:
+  - id: git_pull
+    tool: shell
+    action: execute
+    parameters:
+      command: "git pull origin {{branch}}"
+    on_error: abort
+
+  - id: run_tests
+    tool: shell
+    action: execute
+    parameters:
+      command: "pytest tests/"
+    on_error: abort
+    condition: "not {{skip_tests}}"
+
+  - id: build
+    tool: shell
+    action: execute
+    parameters:
+      command: "npm run build"
+    on_error: abort
+    dependencies:
+      - run_tests
+
+  - id: deploy
+    tool: shell
+    action: execute
+    parameters:
+      command: "npm run deploy:{{environment}}"
+    on_error: retry
+    retry:
+      max_attempts: 3
+      backoff: exponential
+    dependencies:
+      - build
+
+  - id: health_check
+    tool: http
+    action: request
+    parameters:
+      url: "https://{{environment}}.example.com/health"
+      method: "GET"
+    on_error: log_and_continue
+    dependencies:
+      - deploy
+
+outputs:
+  deployment_status: "success"
+  environment: "{{environment}}"
+  health_status: "{{health_check.status_code}}"

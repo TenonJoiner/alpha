@@ -1,0 +1,57 @@
+name: "Backup Files"
+version: "1.0.0"
+description: "Backup specified directories to a target location"
+author: "Alpha"
+tags: ["backup", "files", "maintenance"]
+parameters:
+  source_dir:
+    type: string
+    default: "."
+    description: "Source directory to backup"
+  backup_dir:
+    type: string
+    default: "./backups"
+    description: "Destination backup directory"
+  archive_name:
+    type: string
+    default: "backup"
+    description: "Name for backup archive"
+triggers:
+  - type: manual
+  - type: schedule
+    cron: "0 2 * * *"  # Daily at 2 AM
+steps:
+  - id: create_backup_dir
+    tool: shell
+    action: execute
+    parameters:
+      command: "mkdir -p {{backup_dir}}"
+    on_error: abort
+
+  - id: create_archive
+    tool: shell
+    action: execute
+    parameters:
+      command: "tar -czf {{backup_dir}}/{{archive_name}}_$(date +%Y%m%d_%H%M%S).tar.gz {{source_dir}}"
+    on_error: retry
+    retry:
+      max_attempts: 2
+      backoff: linear
+
+  - id: verify_backup
+    tool: shell
+    action: execute
+    parameters:
+      command: "ls -lh {{backup_dir}}/{{archive_name}}_*.tar.gz | tail -1"
+    on_error: log_and_continue
+
+  - id: cleanup_old
+    tool: shell
+    action: execute
+    parameters:
+      command: "find {{backup_dir}} -name '{{archive_name}}_*.tar.gz' -mtime +30 -delete"
+    on_error: log_and_continue
+
+outputs:
+  backup_file: "{{verify_backup.output}}"
+  backup_status: "success"

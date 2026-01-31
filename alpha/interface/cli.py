@@ -27,6 +27,7 @@ from alpha.skills.executor import SkillExecutor
 from alpha.skills import preinstall_builtin_skills
 from alpha.skills.auto_manager import AutoSkillManager
 from alpha.skills.query_classifier import QueryClassifier
+from alpha.workflow.cli import WorkflowCLI
 
 # Initialize logger and console early
 logger = logging.getLogger(__name__)
@@ -68,6 +69,9 @@ class CLI:
 
         # Initialize query classifier for smart skill matching
         self.query_classifier = QueryClassifier()
+
+        # Initialize Workflow CLI
+        self.workflow_cli = WorkflowCLI(console=console)
 
         # Initialize Vector Memory (optional, with graceful fallback)
         self.vector_memory_enabled = False
@@ -230,6 +234,11 @@ IMPORTANT INSTRUCTIONS:
                 # Proactive intelligence commands
                 if user_input.lower().startswith('proactive '):
                     await self._handle_proactive_command(user_input[10:].strip())
+                    continue
+
+                # Workflow commands
+                if user_input.lower().startswith('workflow '):
+                    await self.workflow_cli.handle_command(user_input[9:].strip())
                     continue
 
                 if user_input.lower() == 'preferences':
@@ -733,6 +742,14 @@ IMPORTANT INSTRUCTIONS:
 - **status**: Show system status
 - **skills**: List installed skills
 - **search skill <query>**: Search for available skills
+- **workflow list**: List all workflows
+- **workflow show <name>**: Display workflow definition
+- **workflow run <name> [params]**: Execute workflow
+- **workflow create**: Create new workflow
+- **workflow delete <name>**: Delete workflow
+- **workflow history <name>**: Show execution history
+- **workflow export <name>**: Export workflow
+- **workflow import <file>**: Import workflow
 - **proactive status**: Show proactive intelligence statistics
 - **proactive suggestions**: View pending proactive suggestions
 - **proactive history**: View past proactive executions
@@ -747,6 +764,7 @@ Just type your question or request, and Alpha will help you.
 Alpha has access to:
 - **Tools**: Built-in capabilities (shell, file, search, http, datetime, calculator)
 - **Skills**: Dynamic capabilities that can be auto-discovered and installed on-demand
+- **Workflows**: Reusable multi-step task sequences you can create and schedule
 - **Proactive Intelligence**: Alpha learns from your behavior and proactively suggests tasks
         """
         console.print(Markdown(help_text))

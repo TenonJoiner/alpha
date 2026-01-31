@@ -1,0 +1,46 @@
+name: "Git Sync and Test"
+version: "1.0.0"
+description: "Pull latest code from repository and run tests"
+author: "Alpha"
+tags: ["git", "testing", "ci"]
+parameters:
+  branch:
+    type: string
+    default: "main"
+    description: "Git branch to pull"
+  test_command:
+    type: string
+    default: "pytest"
+    description: "Test command to run"
+triggers:
+  - type: manual
+steps:
+  - id: git_status
+    tool: shell
+    action: execute
+    parameters:
+      command: "git status --short"
+    on_error: abort
+
+  - id: git_pull
+    tool: shell
+    action: execute
+    parameters:
+      command: "git pull origin {{branch}}"
+    on_error: retry
+    retry:
+      max_attempts: 3
+      backoff: exponential
+
+  - id: run_tests
+    tool: shell
+    action: execute
+    parameters:
+      command: "{{test_command}}"
+    on_error: log_and_continue
+
+outputs:
+  git_status: "{{git_status.output}}"
+  pull_result: "{{git_pull.output}}"
+  test_result: "{{run_tests.output}}"
+  test_exit_code: "{{run_tests.exit_code}}"

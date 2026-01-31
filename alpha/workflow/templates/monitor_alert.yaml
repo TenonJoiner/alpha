@@ -1,0 +1,56 @@
+name: "Monitor and Alert"
+version: "1.0.0"
+description: "Check system metrics and send alerts if thresholds exceeded"
+author: "Alpha"
+tags: ["monitoring", "alert", "system"]
+parameters:
+  cpu_threshold:
+    type: integer
+    default: 80
+    description: "CPU usage threshold percentage"
+  mem_threshold:
+    type: integer
+    default: 85
+    description: "Memory usage threshold percentage"
+  disk_threshold:
+    type: integer
+    default: 90
+    description: "Disk usage threshold percentage"
+triggers:
+  - type: schedule
+    cron: "*/15 * * * *"  # Every 15 minutes
+steps:
+  - id: check_cpu
+    tool: shell
+    action: execute
+    parameters:
+      command: "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1"
+    on_error: log_and_continue
+
+  - id: check_memory
+    tool: shell
+    action: execute
+    parameters:
+      command: "free | grep Mem | awk '{printf \"%.0f\", $3/$2 * 100}'"
+    on_error: log_and_continue
+
+  - id: check_disk
+    tool: shell
+    action: execute
+    parameters:
+      command: "df -h / | tail -1 | awk '{print $5}' | cut -d'%' -f1"
+    on_error: log_and_continue
+
+  - id: evaluate_alerts
+    tool: shell
+    action: execute
+    parameters:
+      command: "echo 'CPU: {{check_cpu.output}}% MEM: {{check_memory.output}}% DISK: {{check_disk.output}}%'"
+    on_error: log_and_continue
+    condition: "{{check_cpu.output > cpu_threshold}} or {{check_memory.output > mem_threshold}} or {{check_disk.output > disk_threshold}}"
+
+outputs:
+  cpu_usage: "{{check_cpu.output}}"
+  mem_usage: "{{check_memory.output}}"
+  disk_usage: "{{check_disk.output}}"
+  alert_triggered: "{{evaluate_alerts.executed}}"
