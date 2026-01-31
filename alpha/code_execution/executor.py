@@ -275,6 +275,9 @@ class CodeExecutor:
 
         logger.info(f"Executing provided {language} code ({len(code)} chars)")
 
+        start_time = time.time()
+        self._stats["total_executions"] += 1
+
         retry_count = 0
         last_error = None
         current_code = code
@@ -372,11 +375,15 @@ class CodeExecutor:
                         continue
                     else:
                         # No retries left
+                        self._stats["failed_executions"] += 1
                         logger.error(f"Execution failed after {retry_count + 1} attempts")
                         return result
 
                 # Success!
                 logger.info("Execution completed successfully")
+                self._stats["successful_executions"] += 1
+                execution_time = time.time() - start_time
+                self._stats["total_execution_time"] += execution_time
                 return result
 
             except (UserRejectionError, ExecutionError):

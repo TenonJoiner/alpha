@@ -436,13 +436,18 @@ class PerformanceTracker:
 
     async def _store_stats(self, stats: SkillPerformanceStats):
         """Store aggregated stats in database."""
+        # Convert stats to dict and handle datetime serialization
+        stats_dict = asdict(stats)
+        stats_dict["first_used"] = stats.first_used.isoformat() if stats.first_used else None
+        stats_dict["last_used"] = stats.last_used.isoformat() if stats.last_used else None
+
         await self.learning_store.store_metric(
             metric_type="skill_performance",
             metric_name=stats.skill_id,
             value=stats.roi_score,
             period_start=stats.first_used or datetime.now(),
             period_end=stats.last_used or datetime.now(),
-            metadata=asdict(stats)
+            metadata=stats_dict
         )
 
     def _save_stats(self):

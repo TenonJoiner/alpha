@@ -103,8 +103,8 @@ class TestCodeValidator:
 
     def test_check_security_risk_level_assessment(self, validator):
         """Test risk level assessment"""
-        # High risk code
-        high_risk = "import subprocess\nsubprocess.call(['rm', '-rf', '/'])"
+        # High risk code (using eval which is explicitly high-risk)
+        high_risk = "eval('__import__(\"os\").system(\"rm -rf /\")')"
         report_high = validator.check_security(high_risk, "python")
         assert report_high.risk_level == "high"
 

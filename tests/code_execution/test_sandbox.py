@@ -95,7 +95,6 @@ class TestExecutionResult:
         assert result.error_message is not None
 
 
-@patch('alpha.code_execution.sandbox.docker')
 class TestSandboxManager:
     """Test SandboxManager with mocked Docker"""
 
@@ -142,178 +141,184 @@ class TestSandboxManager:
             timeout=30
         )
 
-    def test_is_docker_available_true(self, mock_docker, mock_docker_setup):
+    def test_is_docker_available_true(self, mock_docker_setup):
         """Test Docker availability check when Docker is available"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        manager = SandboxManager()
-        assert manager.is_docker_available()
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            manager = SandboxManager()
+            assert manager.is_docker_available()
 
-    def test_is_docker_available_false_not_installed(self, mock_docker):
+    def test_is_docker_available_false_not_installed(self):
         """Test Docker availability when Docker SDK not installed"""
-        mock_docker.from_env.side_effect = ImportError("No module named 'docker'")
-        
-        manager = SandboxManager()
-        assert not manager.is_docker_available()
+        # Mock the import to raise ImportError
+        with patch('builtins.__import__', side_effect=ImportError("No module named 'docker'")):
+            manager = SandboxManager()
+            assert not manager.is_docker_available()
 
-    def test_is_docker_available_false_not_running(self, mock_docker):
+    def test_is_docker_available_false_not_running(self):
         """Test Docker availability when Docker daemon not running"""
         mock_client = Mock()
         mock_client.ping.side_effect = Exception("Connection refused")
-        mock_docker.from_env.return_value = mock_client
-        
-        manager = SandboxManager()
-        assert not manager.is_docker_available()
+        with patch('docker.from_env', return_value=mock_client):
+            manager = SandboxManager()
+            assert not manager.is_docker_available()
 
-    def test_create_container_success(self, mock_docker, mock_docker_setup, sandbox_config):
+    def test_create_container_success(self, mock_docker_setup, sandbox_config):
         """Test successful container creation"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        manager = SandboxManager(sandbox_config)
-        container_id = manager.create_container(
-            language="python",
-            code="print('Hello')",
-            config=sandbox_config
-        )
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            manager = SandboxManager(sandbox_config)
+            container_id = manager.create_container(
+                language="python",
+                code="print('Hello')",
+                config=sandbox_config
+            )
 
-        assert container_id is not None
-        assert container_id == "test_container_123"
-        assert container_id in manager._active_containers
-
-    def test_create_container_docker_not_available(self, mock_docker, sandbox_config):
-        """Test container creation when Docker not available"""
-        mock_docker.from_env.side_effect = Exception("Docker not running")
-        
-        manager = SandboxManager(sandbox_config)
-        
-        with pytest.raises(DockerNotAvailableError):
-            manager.create_container("python", "print('test')", sandbox_config)
-
-    def test_execute_code_success(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test successful code execution"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        manager = SandboxManager(sandbox_config)
-        container_id = manager.create_container("python", "print('Hello')", sandbox_config)
-        
-        result = manager.execute_code(container_id, timeout=30)
-
-        assert result.success
-        assert result.exit_code == 0
-        assert "Test output" in result.stdout
-        assert result.execution_time > 0
-
-    def test_execute_code_timeout(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test code execution timeout handling"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        # Mock timeout
-        mock_container = mock_docker_setup.containers.create.return_value
-        mock_container.wait.side_effect = Exception("Request timed out")
-        
-        manager = SandboxManager(sandbox_config)
-        container_id = manager.create_container("python", "while True: pass", sandbox_config)
-        
-        result = manager.execute_code(container_id, timeout=1)
-
-        assert not result.success
-        assert result.timed_out
-        assert "timeout" in result.error_message.lower()
-
-    def test_execute_code_non_zero_exit(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test code execution with non-zero exit code"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        # Mock non-zero exit code
-        mock_container = mock_docker_setup.containers.create.return_value
-        mock_container.wait.return_value = {"StatusCode": 1}
-        mock_container.logs.side_effect = lambda stdout=True, stderr=False: (
-            b"" if stdout else b"Error: something went wrong"
-        )
-        
-        manager = SandboxManager(sandbox_config)
-        container_id = manager.create_container("python", "raise Exception('error')", sandbox_config)
-        
-        result = manager.execute_code(container_id, timeout=30)
-
-        assert not result.success
-        assert result.exit_code == 1
-        assert result.error_message is not None
-
-    def test_cleanup_container_success(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test successful container cleanup"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        manager = SandboxManager(sandbox_config)
-        container_id = manager.create_container("python", "print('test')", sandbox_config)
-        
-        # Verify container is tracked
-        assert container_id in manager._active_containers
-        
-        # Cleanup
-        manager.cleanup_container(container_id)
-        
-        # Verify cleanup
-        assert container_id not in manager._active_containers
-        mock_docker_setup.containers.create.return_value.remove.assert_called_once()
-
-    def test_cleanup_all_containers(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test cleanup of all active containers"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        manager = SandboxManager(sandbox_config)
-        
-        # Create multiple containers
-        container1 = manager.create_container("python", "print('1')", sandbox_config)
-        container2 = manager.create_container("python", "print('2')", sandbox_config)
-        
-        assert len(manager._active_containers) == 2
-        
-        # Cleanup all
-        manager.cleanup_all()
-        
-        assert len(manager._active_containers) == 0
-
-    def test_context_manager_cleanup(self, mock_docker, mock_docker_setup, sandbox_config):
-        """Test context manager automatic cleanup"""
-        mock_docker.from_env.return_value = mock_docker_setup
-        
-        with SandboxManager(sandbox_config) as manager:
-            container_id = manager.create_container("python", "print('test')", sandbox_config)
+            assert container_id is not None
+            assert container_id == "test_container_123"
             assert container_id in manager._active_containers
-        
-        # After context exit, all containers should be cleaned up
-        # (we can't verify since manager is out of scope, but no exceptions should occur)
+
+    def test_create_container_docker_not_available(self, sandbox_config):
+        """Test container creation when Docker not available"""
+        with patch('docker.from_env', side_effect=Exception("Docker not running")):
+            manager = SandboxManager(sandbox_config)
+
+            with pytest.raises(DockerNotAvailableError):
+                manager.create_container("python", "print('test')", sandbox_config)
+
+    def test_execute_code_success(self, mock_docker_setup, sandbox_config):
+        """Test successful code execution"""
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            manager = SandboxManager(sandbox_config)
+            container_id = manager.create_container("python", "print('Hello')", sandbox_config)
+
+            result = manager.execute_code(container_id, timeout=30)
+
+            assert result.success
+            assert result.exit_code == 0
+            assert "Test output" in result.stdout
+            assert result.execution_time > 0
+
+    def test_execute_code_timeout(self, mock_docker_setup, sandbox_config):
+        """Test code execution timeout handling"""
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            # Mock timeout
+            mock_container = mock_docker_setup.containers.create.return_value
+            mock_container.wait.side_effect = Exception("Request timed out")
+
+            manager = SandboxManager(sandbox_config)
+            container_id = manager.create_container("python", "while True: pass", sandbox_config)
+
+            result = manager.execute_code(container_id, timeout=1)
+
+            assert not result.success
+            assert result.timed_out
+            assert "timeout" in result.error_message.lower()
+
+    def test_execute_code_non_zero_exit(self, mock_docker_setup, sandbox_config):
+        """Test code execution with non-zero exit code"""
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            # Mock non-zero exit code
+            mock_container = mock_docker_setup.containers.create.return_value
+            mock_container.wait.return_value = {"StatusCode": 1}
+            mock_container.logs.side_effect = lambda stdout=True, stderr=False: (
+                b"" if stdout else b"Error: something went wrong"
+            )
+
+            manager = SandboxManager(sandbox_config)
+            container_id = manager.create_container("python", "raise Exception('error')", sandbox_config)
+
+            result = manager.execute_code(container_id, timeout=30)
+
+            assert not result.success
+            assert result.exit_code == 1
+            assert result.error_message is not None
+
+    def test_cleanup_container_success(self, mock_docker_setup, sandbox_config):
+        """Test successful container cleanup"""
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            manager = SandboxManager(sandbox_config)
+            container_id = manager.create_container("python", "print('test')", sandbox_config)
+
+            # Verify container is tracked
+            assert container_id in manager._active_containers
+
+            # Cleanup
+            manager.cleanup_container(container_id)
+
+            # Verify cleanup
+            assert container_id not in manager._active_containers
+            mock_docker_setup.containers.create.return_value.remove.assert_called_once()
+
+    def test_cleanup_all_containers(self, mock_docker_setup, sandbox_config):
+        """Test cleanup of all active containers"""
+        # Create different mock containers with unique IDs
+        container_id_counter = [0]
+        def create_mock_container(*args, **kwargs):
+            container_id_counter[0] += 1
+            mock_container = Mock()
+            mock_container.id = f"test_container_{container_id_counter[0]}"
+            mock_container.start = Mock()
+            mock_container.wait.return_value = {"StatusCode": 0}
+            mock_container.logs.side_effect = lambda stdout=True, stderr=False: (
+                b"Test output\n" if stdout else b""
+            )
+            mock_container.stop = Mock()
+            mock_container.remove = Mock()
+            return mock_container
+
+        mock_docker_setup.containers.create = create_mock_container
+
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            manager = SandboxManager(sandbox_config)
+
+            # Create multiple containers
+            container1 = manager.create_container("python", "print('1')", sandbox_config)
+            container2 = manager.create_container("python", "print('2')", sandbox_config)
+
+            assert len(manager._active_containers) == 2
+
+            # Cleanup all
+            manager.cleanup_all()
+
+            assert len(manager._active_containers) == 0
+
+    def test_context_manager_cleanup(self, mock_docker_setup, sandbox_config):
+        """Test context manager automatic cleanup"""
+        with patch('docker.from_env', return_value=mock_docker_setup):
+            with SandboxManager(sandbox_config) as manager:
+                container_id = manager.create_container("python", "print('test')", sandbox_config)
+                assert container_id in manager._active_containers
+
+            # After context exit, all containers should be cleaned up
+            # (we can't verify since manager is out of scope, but no exceptions should occur)
 
 
-@patch('alpha.code_execution.sandbox.docker')
 class TestConvenienceFunction:
     """Test execute_code_sandboxed convenience function"""
 
-    def test_execute_code_sandboxed_success(self, mock_docker):
+    def test_execute_code_sandboxed_success(self):
         """Test convenience function for simple execution"""
         mock_client = MagicMock()
         mock_client.ping.return_value = True
-        
+
         mock_container = Mock()
         mock_container.id = "test_123"
         mock_container.wait.return_value = {"StatusCode": 0}
         mock_container.logs.side_effect = lambda stdout=True, stderr=False: (
             b"42\n" if stdout else b""
         )
-        
+
         mock_client.images.get.return_value = Mock()
         mock_client.containers.create.return_value = mock_container
-        mock_docker.from_env.return_value = mock_client
-        
-        result = execute_code_sandboxed(
-            language="python",
-            code="print(42)",
-            timeout=10
-        )
 
-        assert result.success
-        assert "42" in result.stdout
+        with patch('docker.from_env', return_value=mock_client):
+            result = execute_code_sandboxed(
+                language="python",
+                code="print(42)",
+                timeout=10
+            )
+
+            assert result.success
+            assert "42" in result.stdout
 
 
 if __name__ == "__main__":

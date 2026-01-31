@@ -285,21 +285,19 @@ class TestCodeExecutionToolIntegration:
         """Test complete execution flow from task to result"""
         tool = CodeExecutionTool(mock_llm_service)
 
-        with patch('alpha.code_execution.sandbox.docker') as mock_docker:
-            # Mock Docker availability
-            mock_client = Mock()
-            mock_client.ping.return_value = True
-            
-            mock_container = Mock()
-            mock_container.id = "test_123"
-            mock_container.wait.return_value = {"StatusCode": 0}
-            mock_container.logs.side_effect = lambda stdout=True, stderr=False: (
-                b"3.12.0\n" if stdout else b""
+        # Mock SandboxManager to avoid Docker dependency
+        with patch('alpha.tools.code_tool.SandboxManager') as mock_sandbox_cls:
+            mock_sandbox = Mock()
+            mock_sandbox.is_docker_available.return_value = True
+            mock_sandbox.create_container.return_value = "test_container_123"
+            mock_sandbox.execute_code.return_value = Mock(
+                success=True,
+                stdout="3.12.0\n",
+                stderr="",
+                exit_code=0,
+                execution_time=0.1
             )
-            
-            mock_client.images.get.return_value = Mock()
-            mock_client.containers.create.return_value = mock_container
-            mock_docker.from_env.return_value = mock_client
+            mock_sandbox_cls.return_value = mock_sandbox
 
             result = await tool.execute(
                 task="Print Python version",
