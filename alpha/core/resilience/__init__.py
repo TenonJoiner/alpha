@@ -80,6 +80,10 @@ from .tracker import (
     TaskState
 )
 
+from .storage import (
+    FailureStore
+)
+
 # Public API
 __all__ = [
     # Core Engine
@@ -119,6 +123,9 @@ __all__ = [
     "ProgressTracker",
     "Attempt",
     "TaskState",
+
+    # Storage
+    "FailureStore",
 ]
 
 __version__ = "1.0.0"

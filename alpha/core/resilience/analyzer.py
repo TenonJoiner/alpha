@@ -2,6 +2,7 @@
 Failure Analyzer Component
 
 Analyzes failure patterns to avoid repeating failed approaches.
+Supports both in-memory and persistent SQLite storage.
 """
 
 import logging
@@ -74,18 +75,41 @@ class FailureAnalyzer:
     - Root cause analysis
     - Failure memory to avoid repetition
     - Recommendation generation
+    - Optional SQLite persistence for cross-restart learning
     """
 
-    def __init__(self, pattern_threshold: int = 3):
+    def __init__(
+        self,
+        pattern_threshold: int = 3,
+        enable_persistence: bool = False,
+        db_path: str = "data/failures.db"
+    ):
         """
         Initialize failure analyzer.
 
         Args:
             pattern_threshold: Number of failures to detect pattern
+            enable_persistence: Enable SQLite persistence
+            db_path: Path to SQLite database (if persistence enabled)
         """
         self.pattern_threshold = pattern_threshold
         self.failure_history: List[Failure] = []
         self.attempted_operations: Set[str] = set()
+
+        # Optional SQLite persistence
+        self.enable_persistence = enable_persistence
+        self.store = None
+        if enable_persistence:
+            try:
+                from .storage import FailureStore
+                self.store = FailureStore(db_path)
+                logger.info("SQLite persistence enabled for FailureAnalyzer")
+
+                # Load recent failures from database
+                self._load_recent_failures()
+            except Exception as e:
+                logger.warning(f"Failed to initialize FailureStore: {e}. Using in-memory only.")
+                self.enable_persistence = False
 
     def record_failure(
         self,
@@ -121,6 +145,20 @@ class FailureAnalyzer:
 
         self.failure_history.append(failure)
         self.attempted_operations.add(operation)
+
+        # Persist to database if enabled
+        if self.enable_persistence and self.store:
+            try:
+                self.store.save_failure(
+                    timestamp=failure.timestamp,
+                    error_type=failure.error_type.value,
+                    error_message=failure.error_message,
+                    operation=failure.operation,
+                    context=failure.context,
+                    stack_trace=failure.stack_trace
+                )
+            except Exception as e:
+                logger.warning(f"Failed to persist failure: {e}")
 
         logger.debug(f"Recorded failure: {error_type} for {operation}")
 
@@ -438,3 +476,170 @@ class FailureAnalyzer:
             self.attempted_operations.clear()
 
         logger.debug(f"Cleared failure history (remaining: {len(self.failure_history)})")
+
+    def _load_recent_failures(self, days: int = 7):
+        """
+        Load recent failures from database into memory.
+
+        Args:
+            days: Load failures from last N days
+        """
+        if not self.store:
+            return
+
+        try:
+            since = datetime.now() - timedelta(days=days)
+            db_failures = self.store.get_failures(since=since, limit=1000)
+
+            # Convert database records to Failure objects
+            for record in db_failures:
+                try:
+                    # Parse error_type back to enum
+                    error_type = ErrorType(record['error_type'])
+                except ValueError:
+                    error_type = ErrorType.UNKNOWN
+
+                failure = Failure(
+                    timestamp=datetime.fromisoformat(record['timestamp']),
+                    error_type=error_type,
+                    error_message=record['error_message'],
+                    operation=record['operation'],
+                    context=record.get('context', {}),
+                    stack_trace=record.get('stack_trace')
+                )
+                self.failure_history.append(failure)
+                self.attempted_operations.add(failure.operation)
+
+            logger.info(f"Loaded {len(db_failures)} recent failures from database")
+        except Exception as e:
+            logger.error(f"Failed to load failures from database: {e}")
+
+    def is_strategy_blacklisted(self, strategy_name: str, operation: str) -> bool:
+        """
+        Check if strategy is blacklisted for operation.
+
+        Args:
+            strategy_name: Strategy to check
+            operation: Operation context
+
+        Returns:
+            True if blacklisted, False otherwise
+        """
+        if not self.store:
+            return False
+
+        try:
+            return self.store.is_blacklisted(strategy_name, operation)
+        except Exception as e:
+            logger.warning(f"Failed to check blacklist: {e}")
+            return False
+
+    def add_to_blacklist(
+        self,
+        strategy_name: str,
+        operation: str,
+        reason: str = "Repeated failures"
+    ):
+        """
+        Add strategy to blacklist.
+
+        Args:
+            strategy_name: Strategy to blacklist
+            operation: Operation context
+            reason: Reason for blacklisting
+        """
+        if not self.store:
+            logger.warning("Blacklisting requires persistence to be enabled")
+            return
+
+        try:
+            self.store.add_to_blacklist(strategy_name, operation, reason)
+            logger.info(f"Blacklisted strategy: {strategy_name} for {operation}")
+        except Exception as e:
+            logger.error(f"Failed to add to blacklist: {e}")
+
+    def remove_from_blacklist(self, strategy_name: str, operation: str):
+        """
+        Remove strategy from blacklist.
+
+        Args:
+            strategy_name: Strategy to remove
+            operation: Operation context
+        """
+        if not self.store:
+            logger.warning("Blacklist management requires persistence to be enabled")
+            return
+
+        try:
+            self.store.remove_from_blacklist(strategy_name, operation)
+            logger.info(f"Removed from blacklist: {strategy_name}")
+        except Exception as e:
+            logger.error(f"Failed to remove from blacklist: {e}")
+
+    def get_blacklist(self) -> List[Dict]:
+        """
+        Get all blacklisted strategies.
+
+        Returns:
+            List of blacklisted strategy records
+        """
+        if not self.store:
+            return []
+
+        try:
+            return self.store.get_blacklist()
+        except Exception as e:
+            logger.error(f"Failed to get blacklist: {e}")
+            return []
+
+    def get_analytics(self) -> Dict:
+        """
+        Get analytics on failure patterns.
+
+        Returns:
+            Dictionary with analytics data
+        """
+        if not self.store:
+            return self.get_failure_summary()
+
+        try:
+            analytics = self.store.get_failure_analytics()
+            # Add in-memory stats
+            analytics['in_memory_failures'] = len(self.failure_history)
+            analytics['attempted_operations'] = len(self.attempted_operations)
+            return analytics
+        except Exception as e:
+            logger.error(f"Failed to get analytics: {e}")
+            return self.get_failure_summary()
+
+    def cleanup_old_failures(self, days: int = 30) -> int:
+        """
+        Remove failures older than specified days.
+
+        Args:
+            days: Keep failures from last N days
+
+        Returns:
+            Number of failures deleted
+        """
+        if not self.store:
+            logger.warning("Cleanup requires persistence to be enabled")
+            return 0
+
+        try:
+            deleted = self.store.cleanup_old_failures(days)
+            # Also cleanup in-memory
+            cutoff = datetime.now() - timedelta(days=days)
+            original_count = len(self.failure_history)
+            self.failure_history = [
+                f for f in self.failure_history
+                if f.timestamp >= cutoff
+            ]
+            in_memory_deleted = original_count - len(self.failure_history)
+
+            logger.info(f"Cleaned up {deleted} database failures, {in_memory_deleted} in-memory failures")
+            return deleted + in_memory_deleted
+        except Exception as e:
+            logger.error(f"Failed to cleanup failures: {e}")
+            return 0
+
