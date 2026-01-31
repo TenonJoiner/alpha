@@ -112,14 +112,44 @@ Review all project documents (requirements, technical solutions, progress report
 - Pending requirements aligned with Alpha's core positioning
 
 ### 2. Verify & Optimize Existing Features
-**Default Strategy**: Run smoke tests to quickly validate core functionality
-**Full Testing**: Only execute comprehensive end-to-end testing when:
-- Significant refactoring or architectural changes
-- Before major version releases
-- Critical bug fixes affecting core features
-- Integration of new major dependencies
+**Layered Testing Strategy**: Execute progressive testing based on change scope:
 
-Fix any vulnerabilities or bugs identified before proceeding.
+**Level 1 - Quick Validation (Always Execute)**:
+- Critical path smoke tests for core features
+- Basic integration checks
+- Runtime: ≤2 minutes
+
+**Level 2 - Standard Testing (Default for Most Changes)**:
+- Core feature functional tests
+- API contract validation
+- Error handling verification
+- Key integration scenarios
+- Runtime: ≤10 minutes
+
+**Level 3 - Comprehensive Testing (Trigger Conditions)**:
+- Full test suite including edge cases and boundary conditions
+- Cross-module integration tests
+- Performance benchmarks
+- Security vulnerability scans
+- Execute when:
+  - Significant refactoring or architectural changes
+  - Before major/minor version releases
+  - Critical bug fixes affecting core features
+  - Integration of new major dependencies
+  - Weekly scheduled comprehensive validation
+- Runtime: ≤30 minutes
+
+**Level 4 - Full System Validation (Pre-Release Only)**:
+- Complete end-to-end scenarios
+- Stress and load testing
+- Full benchmark suite
+- Security penetration testing
+- Cross-platform compatibility
+- Runtime: ≤2 hours
+
+**Auto-Escalation Rule**: If Level 1 or 2 tests reveal issues, automatically escalate to next level after fix.
+
+Fix any vulnerabilities or bugs identified before proceeding to next development phase.
 
 ### 3. Complete In-Development Features
 Advance partial implementations to completion. Refine details, improve logic, and conduct comprehensive testing until features meet launch standards.
@@ -150,12 +180,32 @@ Maximize efficiency through concurrent development:
 ### Code Quality
 
 - **Language**: All source code, comments, variables, and docstrings in English only
-- **Testing**: Design CLI-interactive testing framework with layered test strategy:
-  - **Smoke Tests (Default)**: Quick validation of critical paths and core functionality (run on every change)
-  - **Comprehensive Tests (Selective)**: Full coverage including normal, abnormal, and boundary scenarios (triggered by: major refactoring, version releases, critical fixes, integration changes)
+- **Testing**: Design CLI-interactive testing framework with comprehensive layered strategy:
+  - **Level 1 - Smoke Tests**: Critical path validation (always run, ≤2min)
+  - **Level 2 - Standard Tests (Default)**: Functional + integration + error handling tests (run on every change, ≤10min)
+  - **Level 3 - Comprehensive Tests**: Full coverage including edge cases, boundary conditions, performance (triggered by major changes, weekly schedule, ≤30min)
+  - **Level 4 - Full Validation**: End-to-end scenarios + stress testing (pre-release only, ≤2hr)
+  - **Coverage Requirements**: Minimum 80% code coverage for core modules, 60% for utilities
+  - **Auto-Escalation**: Test failures trigger next level validation after fix
+  - **Regression Prevention**: All bug fixes must include corresponding test cases
 - **Security**: Never record account information (keys, passwords) in files, logs, or code; use configured environment variables only
 - **Version Control**: Commit after each task completion with standardized messages (e.g., "Fix XX vulnerability", "Implement XX feature"); follow branch management rules
 - **Dependencies**: Integrate all third-party packages into project installation/deployment scripts with auto-install, version locking, and exception handling
+
+### Testing Quality Assurance
+
+**Continuous Testing Principles**:
+- **Test-First Mindset**: Write tests before or alongside feature implementation
+- **Automated Execution**: Integrate tests into development workflow with pre-commit hooks
+- **Fast Feedback**: Level 1-2 tests provide results within 10 minutes for rapid iteration
+- **Failure Analysis**: Automatically log test failures with context for root cause analysis
+- **Test Maintenance**: Review and update tests quarterly to remove obsolete cases and add new scenarios
+
+**Quality Gates**:
+- **Pre-Commit**: Level 1 tests must pass before code commit
+- **Pre-Merge**: Level 2 tests + affected module Level 3 tests must pass
+- **Pre-Release**: All Level 3 tests + critical Level 4 scenarios must pass
+- **Post-Release**: Monitor production metrics and execute regression tests weekly
 
 ### Agent Benchmark Testing
 
@@ -181,12 +231,25 @@ Implement industry-standard benchmarking to evaluate Alpha's competitive perform
 **Execution**: Automated benchmark runner with parallel execution, detailed logging, structured output (JSON/YAML), comprehensive reports including performance trends, cost analysis, and improvement recommendations
 
 **Testing Strategy**:
-- **Quick Smoke Benchmarks (Default)**: Run subset of critical benchmarks (1-2 tasks per complexity level) on every significant change for rapid feedback
-- **Full Benchmark Suite**: Execute complete benchmark set only when:
+- **Quick Benchmarks (Level 1)**: Critical benchmark subset (1-2 tasks per complexity level) for rapid feedback (≤5min)
+- **Standard Benchmarks (Level 2 - Default)**: Core benchmark suite covering all task categories (2-3 tasks per level) on every significant change (≤15min)
+- **Comprehensive Benchmarks (Level 3)**: Extended benchmark set with edge cases, triggered by:
   - Major feature additions or architectural changes
-  - Pre-release validation for new versions
   - Performance optimization initiatives
-  - Monthly comprehensive assessments
+  - Weekly scheduled validation
+  - Runtime: ≤45min
+- **Full Benchmark Suite (Level 4)**: Complete benchmark coverage including:
+  - All complexity levels (5+ tasks each)
+  - Cross-model performance comparison
+  - Cost-effectiveness analysis
+  - Stress testing scenarios
+  - Execute for:
+    - Pre-release validation for new versions
+    - Monthly comprehensive assessments
+    - Major milestone completions
+  - Runtime: ≤2 hours
+
+**Performance Regression Alerts**: Auto-detect >10% degradation in success rates or >20% increase in latency/cost
 
 **Integration**: Track performance across versions, establish regression alerts, maintain historical trend analysis
 
