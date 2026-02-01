@@ -14,6 +14,7 @@ When this document is provided, immediately execute autonomous development follo
 6. **Use parallel sub-agents** → Maximize efficiency for independent tasks
 7. **Report progress** → After each major milestone
 8. **Track progress in real-time** → Log development activities to `development.log` with LOCAL timestamps (not UTC) to maintain visibility
+9. **Push to GitHub regularly** → Push commits to remote repository after each task completion to ensure code backup and collaboration
 
 **Act as an autonomous development agent, not a conversational assistant.**
 
@@ -25,10 +26,11 @@ When this document is provided, immediately execute autonomous development follo
 - ✅ **Autonomous decision-making** - Choose the most logical next step based on project status and priorities
 - ✅ **Incremental approach** - If uncertainty exists, choose the safest/most incremental path forward
 - ✅ **Document all decisions** - Log every autonomous decision in `development.log` with clear rationale
-- ✅ **Complete tasks end-to-end** - Implement, test, commit, and document without pausing
+- ✅ **Complete tasks end-to-end** - Implement, test, commit, push, and document without pausing
 - ✅ **Handle errors autonomously** - Auto-retry, fallback to alternatives, log failures, continue with next viable task
 - ✅ **Self-directed priority** - Follow this order: Fix broken tests → Complete in-progress features → Start highest priority pending feature
-- ✅ **Commit frequently** - Git commit after each completed sub-feature or major milestone
+- ✅ **Commit and Push frequently** - Git commit after each completed sub-feature or major milestone, and immediately push to remote GitHub repository to ensure code is backed up and accessible
+- ✅ **End-of-task push requirement** - MUST push all commits to GitHub at the end of each development session or major task completion
 
 ---
 
@@ -129,6 +131,12 @@ Execute development in this autonomous, orderly sequence:
 
 **Real-Time Progress Tracking**: Append timestamped entries to `development.log` using LOCAL time (not UTC) - log task start/completion, commits, tests, blockers, decisions, and progress updates frequently during long tasks.
 
+**Git Synchronization Protocol**:
+- Commit after completing each sub-feature or significant change
+- Push to GitHub immediately after commits: `git push origin main` (or current branch)
+- MANDATORY: Push at end of every development session without exception
+- Log all git operations (commit & push) in `development.log`
+
 ### 1. Research & Progress Assessment
 Review all project documents (requirements, technical solutions, progress reports) to identify:
 - Completed and stable features
@@ -168,7 +176,12 @@ Advance partial implementations to completion. Refine details, improve logic, an
 - **Language**: English only for all code, comments, and documentation
 - **Testing**: Layered testing strategy (smoke → standard → comprehensive → full validation) with high coverage requirements and regression prevention
 - **Security**: Never hardcode credentials; use environment variables
-- **Version Control**: Commit after each task with clear, standardized messages
+- **Version Control**:
+  - Commit after each task with clear, standardized messages
+  - **CRITICAL: Push to GitHub immediately** after commits to ensure remote backup
+  - Push at minimum after each completed feature, bug fix, or major milestone
+  - Never end a development session without pushing all local commits
+  - Use `git push origin <branch>` to sync with remote repository
 - **Dependencies**: Auto-install scripts with version locking
 
 ### Testing Quality Assurance
