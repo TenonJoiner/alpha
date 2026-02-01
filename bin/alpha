@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""
+Alpha Command Line Tool
+
+Provides convenient commands for interacting with Alpha server.
+"""
+
+import sys
+import os
+import subprocess
+import argparse
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+
+def cmd_start(args):
+    """Start Alpha server."""
+    print("Starting Alpha server...")
+
+    cmd = [
+        sys.executable, "-m", "alpha.main",
+        "--daemon",
+        "--api-host", args.host,
+        "--api-port", str(args.port)
+    ]
+
+    if args.config:
+        cmd.extend(["--config", args.config])
+
+    try:
+        subprocess.run(cmd, check=True)
+        print(f"✓ Alpha server started")
+        print(f"  API: http://{args.host}:{args.port}")
+        print(f"  WebSocket: ws://{args.host}:{args.port}/api/v1/ws/chat")
+        print()
+        print("Connect with: alpha chat")
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting server: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_stop(args):
+    """Stop Alpha server."""
+    print("Stopping Alpha server...")
+
+    pid_file = args.pid_file or "/var/run/alpha/alpha.pid"
+
+    if not os.path.exists(pid_file):
+        print("Alpha server is not running (no PID file found)")
+        return
+
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read().strip())
+
+        os.kill(pid, 15)  # SIGTERM
+        print("✓ Alpha server stopped")
+
+        # Remove PID file
+        os.remove(pid_file)
+
+    except ProcessLookupError:
+        print("Alpha server process not found (stale PID file)")
+        os.remove(pid_file)
+    except Exception as e:
+        print(f"Error stopping server: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_status(args):
+    """Check Alpha server status."""
+    pid_file = args.pid_file or "/var/run/alpha/alpha.pid"
+
+    if not os.path.exists(pid_file):
+        print("Alpha server: NOT RUNNING")
+        return
+
+    try:
+        with open(pid_file, 'r') as f:
+            pid = int(f.read().strip())
+
+        # Check if process is running
+        os.kill(pid, 0)  # Signal 0 just checks if process exists
+
+        print(f"Alpha server: RUNNING (PID: {pid})")
+
+        # Try to get status from API
+        import requests
+        try:
+            response = requests.get(f"http://{args.host}:{args.port}/api/v1/status", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                print(f"  Status: {data.get('status', 'unknown')}")
+                print(f"  Uptime: {data.get('uptime', 0):.1f}s")
+                print(f"  Tasks: {data.get('tasks_running', 0)} running, {data.get('tasks_completed', 0)} completed")
+        except:
+            pass
+
+    except ProcessLookupError:
+        print("Alpha server: NOT RUNNING (stale PID file)")
+        os.remove(pid_file)
+    except Exception as e:
+        print(f"Error checking status: {e}", file=sys.stderr)
+
+
+def cmd_chat(args):
+    """Connect to Alpha server for chat."""
+    import asyncio
+    from alpha.client.cli import main as cli_main
+
+    # Override sys.argv for the client
+    sys.argv = [
+        'alpha-client',
+        '--server', f"ws://{args.host}:{args.port}/api/v1/ws/chat"
+    ]
+
+    asyncio.run(cli_main())
+
+
+def cmd_task(args):
+    """Submit a task to Alpha server."""
+    import requests
+
+    url = f"http://{args.host}:{args.port}/api/v1/tasks"
+    data = {
+        "prompt": args.prompt,
+        "priority": args.priority
+    }
+
+    try:
+        print(f"Submitting task: {args.prompt}")
+        response = requests.post(url, json=data, timeout=10)
+        response.raise_for_status()
+
+        result = response.json()
+        task_id = result.get('task_id')
+        print(f"✓ Task submitted: {task_id}")
+        print(f"  Check status: alpha task-status {task_id}")
+
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to Alpha server", file=sys.stderr)
+        print("Make sure the server is running: alpha start", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error submitting task: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_task_status(args):
+    """Check task status."""
+    import requests
+
+    url = f"http://{args.host}:{args.port}/api/v1/tasks/{args.task_id}"
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+
+        result = response.json()
+        print(f"Task: {result.get('task_id')}")
+        print(f"  Status: {result.get('status')}")
+        print(f"  Created: {result.get('created_at')}")
+
+        if result.get('result'):
+            print(f"  Result: {result.get('result')}")
+
+        if result.get('error'):
+            print(f"  Error: {result.get('error')}")
+
+    except requests.exceptions.ConnectionError:
+        print("Error: Cannot connect to Alpha server", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error checking task status: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description='Alpha - Personal Super AI Assistant',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  alpha start              Start Alpha server
+  alpha chat               Connect to Alpha for chat
+  alpha task "查天气"       Submit a task
+  alpha status             Check server status
+  alpha stop               Stop server
+
+For more information: https://github.com/yourusername/alpha
+        """
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+
+    # Start command
+    start_parser = subparsers.add_parser('start', help='Start Alpha server')
+    start_parser.add_argument('--host', default='0.0.0.0', help='API host (default: 0.0.0.0)')
+    start_parser.add_argument('--port', type=int, default=8080, help='API port (default: 8080)')
+    start_parser.add_argument('--config', help='Config file path')
+    start_parser.set_defaults(func=cmd_start)
+
+    # Stop command
+    stop_parser = subparsers.add_parser('stop', help='Stop Alpha server')
+    stop_parser.add_argument('--pid-file', help='PID file location')
+    stop_parser.set_defaults(func=cmd_stop)
+
+    # Status command
+    status_parser = subparsers.add_parser('status', help='Check server status')
+    status_parser.add_argument('--host', default='localhost', help='API host')
+    status_parser.add_argument('--port', type=int, default=8080, help='API port')
+    status_parser.add_argument('--pid-file', help='PID file location')
+    status_parser.set_defaults(func=cmd_status)
+
+    # Chat command
+    chat_parser = subparsers.add_parser('chat', help='Connect for chat')
+    chat_parser.add_argument('--host', default='localhost', help='Server host')
+    chat_parser.add_argument('--port', type=int, default=8080, help='Server port')
+    chat_parser.set_defaults(func=cmd_chat)
+
+    # Task command
+    task_parser = subparsers.add_parser('task', help='Submit a task')
+    task_parser.add_argument('prompt', help='Task description')
+    task_parser.add_argument('--priority', type=int, default=5, help='Task priority (1-10)')
+    task_parser.add_argument('--host', default='localhost', help='API host')
+    task_parser.add_argument('--port', type=int, default=8080, help='API port')
+    task_parser.set_defaults(func=cmd_task)
+
+    # Task status command
+    task_status_parser = subparsers.add_parser('task-status', help='Check task status')
+    task_status_parser.add_argument('task_id', help='Task ID')
+    task_status_parser.add_argument('--host', default='localhost', help='API host')
+    task_status_parser.add_argument('--port', type=int, default=8080, help='API port')
+    task_status_parser.set_defaults(func=cmd_task_status)
+
+    # Parse args
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    # Execute command
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

@@ -27,7 +27,7 @@ Alpha is your intelligent personal assistant powered by advanced AI models. It c
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/alpha.git
+git clone https://github.com/flashspy/alpha.git
 cd alpha
 
 # Create virtual environment
@@ -63,6 +63,26 @@ export OPENAI_API_KEY="your-openai-api-key"
 
 ### 3. Start Alpha
 
+**NEW: Client-Server Mode (Recommended for 24/7 Operation)**
+
+Alpha now supports a true client-server architecture where the server runs 24/7 and you can connect/disconnect anytime:
+
+```bash
+# Add bin/alpha to your PATH
+export PATH="$PATH:$(pwd)/bin"
+
+# Start Alpha server (runs in background)
+alpha start
+
+# Connect for chat (from same or different terminal)
+alpha chat
+
+# Disconnect anytime - server keeps running!
+# Reconnect later - conversation history preserved!
+```
+
+**Traditional Interactive Mode (Stops when you close terminal)**
+
 ```bash
 # Quick start
 ./start.sh
@@ -70,6 +90,8 @@ export OPENAI_API_KEY="your-openai-api-key"
 # Or manually
 python -m alpha.interface.cli
 ```
+
+**See [Client-Server Guide](docs/CLIENT_SERVER_GUIDE.md) for detailed instructions.**
 
 ## Usage Examples
 

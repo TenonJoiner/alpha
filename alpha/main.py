@@ -9,6 +9,7 @@ from pathlib import Path
 from alpha.core.engine import AlphaEngine
 from alpha.utils.config import load_config
 from alpha.daemon import PIDManager, SignalHandler, daemonize
+from alpha.api.server import start_server
 
 
 def setup_logging(daemon_mode: bool = False):
@@ -62,6 +63,20 @@ def parse_args():
         help='Configuration file path (default: config.yaml)'
     )
 
+    parser.add_argument(
+        '--api-host',
+        type=str,
+        default='0.0.0.0',
+        help='API server host (default: 0.0.0.0)'
+    )
+
+    parser.add_argument(
+        '--api-port',
+        type=int,
+        default=8080,
+        help='API server port (default: 8080)'
+    )
+
     return parser.parse_args()
 
 
@@ -93,13 +108,13 @@ async def main():
     logger.info("=" * 60)
     logger.info("Alpha AI Assistant Starting...")
     if args.daemon:
-        logger.info("Running in daemon mode")
+        logger.info("Running in daemon mode with API server")
+        logger.info(f"API will be available at http://{args.api_host}:{args.api_port}")
     logger.info("=" * 60)
 
     # Setup PID file and signal handlers for daemon mode
     pid_manager = None
     signal_handler = None
-    engine = None
 
     try:
         # Create PID file if in daemon mode
@@ -114,17 +129,15 @@ async def main():
         config = load_config(args.config)
         logger.info(f"Loaded configuration: {config.name} v{config.version}")
 
-        # Create and start engine
-        engine = AlphaEngine(config)
-
         # Setup signal handlers
         signal_handler = SignalHandler()
+
+        shutdown_event = asyncio.Event()
 
         async def shutdown():
             """Shutdown handler."""
             logger.info("Shutting down Alpha...")
-            if engine:
-                await engine.shutdown()
+            shutdown_event.set()
 
         async def reload_config():
             """Reload configuration handler."""
@@ -132,7 +145,6 @@ async def main():
             try:
                 new_config = load_config(args.config)
                 logger.info("Configuration reloaded successfully")
-                # Note: Full config reload may require engine restart
             except Exception as e:
                 logger.error(f"Failed to reload configuration: {e}")
 
@@ -141,11 +153,25 @@ async def main():
             reload_callback=reload_config
         )
 
-        await engine.startup()
+        # Run API server (includes engine initialization)
+        logger.info(f"Starting API server on {args.api_host}:{args.api_port}")
+        server_task = asyncio.create_task(
+            start_server(
+                host=args.api_host,
+                port=args.api_port,
+                reload=False
+            )
+        )
 
-        # Run main loop
-        logger.info("Alpha is ready")
-        await engine.run()
+        # Wait for shutdown signal
+        await shutdown_event.wait()
+
+        # Cancel server
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            logger.info("Server stopped")
 
     except KeyboardInterrupt:
         logger.info("Received interrupt signal")
@@ -154,12 +180,6 @@ async def main():
         sys.exit(1)
     finally:
         # Cleanup
-        if engine:
-            try:
-                await engine.shutdown()
-            except Exception as e:
-                logger.error(f"Error during shutdown: {e}")
-
         if pid_manager:
             pid_manager.remove()
 
