@@ -92,14 +92,23 @@ class TestImageProcessor:
         assert optimized.width == image.width
         assert optimized.height == image.height
 
-    def test_optimize_image_reduces_size(self, processor, large_image):
+    def test_optimize_image_reduces_size(self, processor, tmp_path):
         """Test optimization reduces image size"""
-        image = processor.load_image(large_image)
+        # Create an image with random noise to ensure it's actually large
+        import numpy as np
+
+        # Create 2000x2000 image with random pixels (will compress poorly)
+        img_path = tmp_path / "large_noisy.png"
+        random_data = np.random.randint(0, 256, (2000, 2000, 3), dtype=np.uint8)
+        img = Image.fromarray(random_data, 'RGB')
+        img.save(img_path)
+
+        image = processor.load_image(img_path)
         original_width = image.width
         original_height = image.height
 
-        # Optimize with very low threshold
-        optimized = processor.optimize_image(image, max_size=100 * 1024)
+        # Optimize with very low threshold to force scaling
+        optimized = processor.optimize_image(image, max_size=50 * 1024)
 
         # Should be smaller
         assert optimized.width < original_width

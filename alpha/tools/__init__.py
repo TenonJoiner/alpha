@@ -19,6 +19,7 @@ from .registry import (
 )
 
 from .code_tool import CodeExecutionTool
+from .image_tool import ImageAnalysisTool
 
 __all__ = [
     # Base classes
@@ -34,6 +35,8 @@ __all__ = [
     "CalculatorTool",
     # Code execution tool (Phase 4.1)
     "CodeExecutionTool",
+    # Image analysis tool (Phase 9.1 - Multimodal)
+    "ImageAnalysisTool",
     # Registry helper
     "create_default_registry",
 ]
