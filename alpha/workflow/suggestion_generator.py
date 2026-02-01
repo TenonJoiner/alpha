@@ -1,26 +1,16 @@
 """
-Alpha - Workflow Suggestion Generator
+Workflow Suggestion Generator
 
-Generates workflow suggestions from detected patterns and creates workflow definitions.
-
-Features:
-- Generate workflow suggestions from patterns
-- Auto-create workflow definitions from task history
-- Detect workflow execution opportunities
-- Track suggestion approval/rejection
-- Prioritize suggestions by value
+Generates workflow suggestions from detected patterns and auto-creates workflows.
 """
 
 import logging
-import sqlite3
-import json
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
-from pathlib import Path
-import uuid
 
-from alpha.workflow.pattern_detector import WorkflowPattern
+from .pattern_detector import WorkflowPattern
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +22,31 @@ class WorkflowSuggestion:
     pattern_id: str
     suggested_name: str
     description: str
-    confidence: float  # 0.0 to 1.0
+    confidence: float
     priority: int  # 1-5, higher = more important
     steps: List[Dict[str, Any]]  # Auto-generated workflow steps
-    parameters: Dict[str, str]  # Detected parameters
+    parameters: Dict[str, Any]  # Detected parameters
     triggers: List[str]  # Conditions for auto-execution
     created_at: datetime
     status: str  # "pending", "approved", "rejected", "auto_created"
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        result = asdict(self)
-        result['created_at'] = self.created_at.isoformat()
-        return result
+        """Convert to dictionary."""
+        return {
+            "suggestion_id": self.suggestion_id,
+            "pattern_id": self.pattern_id,
+            "suggested_name": self.suggested_name,
+            "description": self.description,
+            "confidence": self.confidence,
+            "priority": self.priority,
+            "steps": self.steps,
+            "parameters": self.parameters,
+            "triggers": self.triggers,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "status": self.status,
+            "metadata": self.metadata
+        }
 
 
 class WorkflowSuggestionGenerator:
@@ -61,52 +62,18 @@ class WorkflowSuggestionGenerator:
 
     def __init__(
         self,
-        database_path: str,
-        workflow_library=None  # Optional WorkflowLibrary instance
+        suggestion_store: Optional[Any] = None,
+        workflow_library: Optional[Any] = None
     ):
         """
         Initialize suggestion generator.
 
         Args:
-            database_path: Path to database for storing suggestions
-            workflow_library: Optional WorkflowLibrary for checking existing workflows
+            suggestion_store: Storage for workflow suggestions
+            workflow_library: Library of existing workflows
         """
-        self.db_path = database_path
+        self.suggestion_store = suggestion_store
         self.workflow_library = workflow_library
-        self._init_database()
-
-    def _init_database(self):
-        """Initialize database tables for suggestions."""
-        try:
-            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        except (PermissionError, OSError):
-            pass
-
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS workflow_suggestions (
-                    suggestion_id TEXT PRIMARY KEY,
-                    pattern_id TEXT,
-                    suggested_name TEXT,
-                    description TEXT,
-                    confidence REAL,
-                    priority INTEGER,
-                    steps TEXT,  -- JSON
-                    parameters TEXT,  -- JSON
-                    triggers TEXT,  -- JSON
-                    created_at TEXT,
-                    status TEXT,
-                    metadata TEXT  -- JSON
-                )
-            """)
-
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            logger.error(f"Failed to initialize suggestion database: {e}")
 
     def generate_workflow_suggestions(
         self,
@@ -122,433 +89,461 @@ class WorkflowSuggestionGenerator:
         - Low frequency OR low confidence → priority 1
 
         Args:
-            patterns: List of detected patterns
-            max_suggestions: Maximum suggestions to return
+            patterns: List of detected workflow patterns
+            max_suggestions: Maximum number of suggestions to generate
 
         Returns:
-            List of suggestions sorted by priority (high to low)
+            List of workflow suggestions, sorted by priority (DESC)
         """
         if not patterns:
+            logger.info("No patterns provided for suggestion generation")
             return []
 
-        logger.info(f"Generating workflow suggestions from {len(patterns)} patterns")
-
         suggestions = []
-        for pattern in patterns:
-            # Skip if workflow already exists with this pattern
-            if self._workflow_exists_for_pattern(pattern):
-                logger.info(f"Skipping pattern {pattern.pattern_id} - workflow already exists")
+
+        for pattern in patterns[:max_suggestions]:
+            try:
+                # Generate workflow definition
+                workflow_def = self.create_workflow_from_pattern(pattern)
+
+                # Calculate priority
+                priority = self._calculate_priority(pattern)
+
+                # Generate description
+                description = self._generate_description(pattern)
+
+                # Detect triggers
+                triggers = self._detect_triggers(pattern)
+
+                # Create suggestion
+                suggestion = WorkflowSuggestion(
+                    suggestion_id=str(uuid.uuid4()),
+                    pattern_id=pattern.pattern_id,
+                    suggested_name=pattern.suggested_workflow_name,
+                    description=description,
+                    confidence=pattern.confidence,
+                    priority=priority,
+                    steps=workflow_def.get("steps", []),
+                    parameters=workflow_def.get("parameters", {}),
+                    triggers=triggers,
+                    created_at=datetime.now(),
+                    status="pending",
+                    metadata={
+                        "pattern_frequency": pattern.frequency,
+                        "pattern_length": len(pattern.task_sequence),
+                        "first_seen": pattern.first_seen.isoformat() if pattern.first_seen else None,
+                        "last_seen": pattern.last_seen.isoformat() if pattern.last_seen else None
+                    }
+                )
+
+                suggestions.append(suggestion)
+                logger.info(f"Generated suggestion: {suggestion.suggested_name} (priority={priority}, confidence={pattern.confidence})")
+
+            except Exception as e:
+                logger.error(f"Error generating suggestion for pattern {pattern.pattern_id}: {e}")
                 continue
 
-            # Create suggestion
-            suggestion = self._create_suggestion_from_pattern(pattern)
-            suggestions.append(suggestion)
-
-        # Sort by priority (desc) then confidence (desc)
+        # Sort by priority (DESC), then confidence (DESC)
         suggestions.sort(key=lambda s: (s.priority, s.confidence), reverse=True)
-
-        # Limit to max_suggestions
-        suggestions = suggestions[:max_suggestions]
-
-        # Store suggestions
-        for suggestion in suggestions:
-            self._store_suggestion(suggestion)
 
         logger.info(f"Generated {len(suggestions)} workflow suggestions")
         return suggestions
 
-    def _create_suggestion_from_pattern(
+    def create_workflow_from_pattern(
         self,
         pattern: WorkflowPattern
-    ) -> WorkflowSuggestion:
+    ) -> Dict[str, Any]:
         """
-        Create a workflow suggestion from a pattern.
+        Auto-generate workflow definition from pattern.
 
-        Generates:
-        - Suggested workflow name
-        - Description
-        - Priority based on frequency and confidence
-        - Workflow steps
-        - Parameters
-        - Triggers
-        """
-        # Calculate priority (1-5)
-        priority = self._calculate_priority(pattern)
+        Steps:
+        1. Extract task sequence
+        2. Identify common parameters
+        3. Generate step definitions
+        4. Add error handling
+        5. Create workflow schema
 
-        # Generate workflow steps
-        steps = self._generate_workflow_steps(pattern)
+        Args:
+            pattern: Workflow pattern
 
-        # Extract parameters
-        parameters = self._extract_parameters(pattern)
-
-        # Generate triggers
-        triggers = self._generate_triggers(pattern)
-
-        # Create description
-        description = self._generate_description(pattern)
-
-        suggestion = WorkflowSuggestion(
-            suggestion_id=str(uuid.uuid4()),
-            pattern_id=pattern.pattern_id,
-            suggested_name=pattern.suggested_workflow_name,
-            description=description,
-            confidence=pattern.confidence,
-            priority=priority,
-            steps=steps,
-            parameters=parameters,
-            triggers=triggers,
-            created_at=datetime.now(),
-            status="pending",
-            metadata={
-                'pattern_frequency': pattern.frequency,
-                'pattern_task_count': len(pattern.task_sequence),
-                'pattern_avg_interval_days': pattern.avg_interval.days
-            }
-        )
-
-        return suggestion
-
-    def _calculate_priority(self, pattern: WorkflowPattern) -> int:
-        """
-        Calculate priority score 1-5.
-
-        Factors:
-        - Frequency: More = higher
-        - Confidence: Higher = higher
-        - Recency: Recent = higher
-        """
-        score = 0.0
-
-        # Frequency factor (0-2 points)
-        if pattern.frequency >= 10:
-            score += 2.0
-        elif pattern.frequency >= 5:
-            score += 1.5
-        elif pattern.frequency >= 3:
-            score += 1.0
-
-        # Confidence factor (0-2 points)
-        score += pattern.confidence * 2.0
-
-        # Recency factor (0-1 point)
-        days_since_last = (datetime.now() - pattern.last_seen).days
-        if days_since_last <= 3:
-            score += 1.0
-        elif days_since_last <= 7:
-            score += 0.5
-
-        # Convert to 1-5 scale
-        priority = max(1, min(5, int(score + 0.5)))
-        return priority
-
-    def _generate_workflow_steps(
-        self,
-        pattern: WorkflowPattern
-    ) -> List[Dict[str, Any]]:
-        """
-        Generate workflow step definitions from pattern.
-
-        Each step:
-        - action: normalized task description
-        - on_error: "retry" (default)
-        - depends_on: [] (sequential by default)
+        Returns:
+            Workflow definition dict with steps, parameters, metadata
         """
         steps = []
-
-        for i, task_desc in enumerate(pattern.task_sequence):
-            step = {
-                'name': f'Step {i+1}: {task_desc.capitalize()}',
-                'action': task_desc,
-                'on_error': 'retry',
-                'depends_on': [i-1] if i > 0 else [],
-                'metadata': {
-                    'auto_generated': True,
-                    'pattern_id': pattern.pattern_id
-                }
-            }
-            steps.append(step)
-
-        return steps
-
-    def _extract_parameters(
-        self,
-        pattern: WorkflowPattern
-    ) -> Dict[str, str]:
-        """
-        Extract potential parameters from pattern.
-
-        Looks for:
-        - Branch names (git patterns)
-        - Environments (deploy patterns)
-        - File paths
-        - Common variables
-        """
         parameters = {}
 
-        # Analyze task sequence for common parameter patterns
-        task_text = ' '.join(pattern.task_sequence).lower()
+        for i, task_desc in enumerate(pattern.task_sequence):
+            # Parse task description and create step
+            step = self._create_step_from_task(task_desc, step_index=i)
+            steps.append(step)
 
-        # Git branch parameters
-        if 'git' in task_text or 'branch' in task_text:
-            parameters['branch'] = 'main'
+            # Extract parameters from task
+            task_params = self._extract_parameters_from_task(task_desc)
+            parameters.update(task_params)
 
-        # Deployment environment
-        if 'deploy' in task_text or 'staging' in task_text or 'production' in task_text:
-            parameters['environment'] = 'staging'
-
-        # Test parameters
-        if 'test' in task_text:
-            parameters['test_path'] = 'tests/'
-
-        return parameters
-
-    def _generate_triggers(
-        self,
-        pattern: WorkflowPattern
-    ) -> List[str]:
-        """
-        Generate trigger conditions for workflow.
-
-        Based on:
-        - Temporal patterns (daily, weekly)
-        - Contextual triggers (after certain events)
-        """
-        triggers = []
-
-        # Temporal triggers
-        if pattern.avg_interval.days == 1:
-            triggers.append("schedule: daily at 9:00 AM")
-        elif pattern.avg_interval.days == 7:
-            triggers.append("schedule: weekly on Monday at 9:00 AM")
-
-        # Event-based triggers (basic heuristics)
-        task_text = ' '.join(pattern.task_sequence).lower()
-
-        if 'git pull' in task_text:
-            triggers.append("event: after morning startup")
-
-        if 'backup' in task_text:
-            triggers.append("event: end of day")
-
-        return triggers
-
-    def _generate_description(self, pattern: WorkflowPattern) -> str:
-        """Generate human-readable description of the workflow."""
-        tasks = pattern.task_sequence
-        frequency = pattern.frequency
-
-        if len(tasks) == 2:
-            desc = f"Automate {tasks[0]} followed by {tasks[1]}."
-        elif len(tasks) == 3:
-            desc = f"Automate {tasks[0]}, {tasks[1]}, and {tasks[2]}."
-        else:
-            desc = f"Automate {len(tasks)}-step process: {tasks[0]} → ... → {tasks[-1]}."
-
-        desc += f" Detected {frequency} times in recent history."
-
-        return desc
-
-    def _workflow_exists_for_pattern(self, pattern: WorkflowPattern) -> bool:
-        """
-        Check if a workflow already exists for this pattern.
-
-        Uses workflow library if available.
-        """
-        if not self.workflow_library:
-            return False
-
-        # Check by workflow name similarity
-        try:
-            workflows = self.workflow_library.list_workflows()
-            for workflow in workflows:
-                if workflow.name.lower() == pattern.suggested_workflow_name.lower():
-                    return True
-        except Exception as e:
-            logger.warning(f"Error checking existing workflows: {e}")
-
-        return False
-
-    def _store_suggestion(self, suggestion: WorkflowSuggestion):
-        """Store suggestion in database."""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                INSERT OR REPLACE INTO workflow_suggestions
-                (suggestion_id, pattern_id, suggested_name, description, confidence,
-                 priority, steps, parameters, triggers, created_at, status, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                suggestion.suggestion_id,
-                suggestion.pattern_id,
-                suggestion.suggested_name,
-                suggestion.description,
-                suggestion.confidence,
-                suggestion.priority,
-                json.dumps(suggestion.steps),
-                json.dumps(suggestion.parameters),
-                json.dumps(suggestion.triggers),
-                suggestion.created_at.isoformat(),
-                suggestion.status,
-                json.dumps(suggestion.metadata)
-            ))
-
-            conn.commit()
-            conn.close()
-        except sqlite3.Error as e:
-            logger.error(f"Failed to store suggestion: {e}")
-
-    def get_pending_suggestions(self, limit: int = 10) -> List[WorkflowSuggestion]:
-        """
-        Get pending workflow suggestions.
-
-        Args:
-            limit: Maximum suggestions to return
-
-        Returns:
-            List of pending suggestions sorted by priority
-        """
-        try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT * FROM workflow_suggestions
-                WHERE status = 'pending'
-                ORDER BY priority DESC, confidence DESC
-                LIMIT ?
-            """, (limit,))
-
-            suggestions = []
-            for row in cursor.fetchall():
-                suggestion = WorkflowSuggestion(
-                    suggestion_id=row['suggestion_id'],
-                    pattern_id=row['pattern_id'],
-                    suggested_name=row['suggested_name'],
-                    description=row['description'],
-                    confidence=row['confidence'],
-                    priority=row['priority'],
-                    steps=json.loads(row['steps']),
-                    parameters=json.loads(row['parameters']),
-                    triggers=json.loads(row['triggers']),
-                    created_at=datetime.fromisoformat(row['created_at']),
-                    status=row['status'],
-                    metadata=json.loads(row['metadata'])
-                )
-                suggestions.append(suggestion)
-
-            conn.close()
-            return suggestions
-
-        except sqlite3.Error as e:
-            logger.error(f"Failed to get pending suggestions: {e}")
-            return []
-
-    def approve_suggestion(self, suggestion_id: str) -> bool:
-        """
-        Approve a suggestion and mark for workflow creation.
-
-        Args:
-            suggestion_id: Suggestion ID to approve
-
-        Returns:
-            True if successful
-        """
-        return self._update_suggestion_status(suggestion_id, "approved")
-
-    def reject_suggestion(self, suggestion_id: str) -> bool:
-        """
-        Reject a suggestion.
-
-        Args:
-            suggestion_id: Suggestion ID to reject
-
-        Returns:
-            True if successful
-        """
-        return self._update_suggestion_status(suggestion_id, "rejected")
-
-    def _update_suggestion_status(self, suggestion_id: str, status: str) -> bool:
-        """Update suggestion status."""
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                UPDATE workflow_suggestions
-                SET status = ?
-                WHERE suggestion_id = ?
-            """, (status, suggestion_id))
-
-            conn.commit()
-            conn.close()
-            return True
-
-        except sqlite3.Error as e:
-            logger.error(f"Failed to update suggestion status: {e}")
-            return False
-
-    def create_workflow_from_suggestion(
-        self,
-        suggestion: WorkflowSuggestion
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Create workflow definition from suggestion.
-
-        Returns workflow definition compatible with WorkflowLibrary.
-        """
+        # Create workflow definition
         workflow_def = {
-            'name': suggestion.suggested_name,
-            'description': suggestion.description,
-            'version': '1.0.0',
-            'tags': ['auto-generated', 'proactive'],
-            'parameters': suggestion.parameters,
-            'steps': suggestion.steps,
-            'metadata': {
-                'generated_from_pattern': suggestion.pattern_id,
-                'generated_at': datetime.now().isoformat(),
-                'confidence': suggestion.confidence,
-                'priority': suggestion.priority
+            "name": pattern.suggested_workflow_name,
+            "description": f"Auto-generated from pattern {pattern.pattern_id}",
+            "steps": steps,
+            "parameters": parameters,
+            "metadata": {
+                "auto_generated": True,
+                "pattern_id": pattern.pattern_id,
+                "pattern_frequency": pattern.frequency,
+                "pattern_confidence": pattern.confidence,
+                "created_at": datetime.now().isoformat()
             }
         }
 
         return workflow_def
 
-    def get_suggestion_by_id(self, suggestion_id: str) -> Optional[WorkflowSuggestion]:
-        """Get suggestion by ID."""
+    def _create_step_from_task(
+        self,
+        task_description: str,
+        step_index: int
+    ) -> Dict[str, Any]:
+        """
+        Create a workflow step from a task description.
+
+        Args:
+            task_description: Normalized task description
+            step_index: Index of this step in the workflow
+
+        Returns:
+            Step definition dict
+        """
+        # Generate step name
+        step_name = f"step_{step_index + 1}"
+
+        # Try to infer step type from task description
+        step_type = self._infer_step_type(task_description)
+
+        # Create step definition
+        step = {
+            "name": step_name,
+            "type": step_type,
+            "description": task_description,
+            "config": {},
+            "error_handling": {
+                "retry_count": 2,
+                "retry_delay": 5,
+                "on_failure": "stop"
+            }
+        }
+
+        return step
+
+    def _infer_step_type(self, task_description: str) -> str:
+        """
+        Infer step type from task description.
+
+        Returns one of: "command", "script", "http_request", "file_operation", "generic"
+        """
+        task_lower = task_description.lower()
+
+        # Check for common patterns
+        if any(word in task_lower for word in ["git", "clone", "commit", "push", "pull"]):
+            return "command"
+        elif any(word in task_lower for word in ["backup", "copy", "move", "delete"]):
+            return "file_operation"
+        elif any(word in task_lower for word in ["deploy", "build", "test", "run"]):
+            return "command"
+        elif any(word in task_lower for word in ["http", "api", "request", "fetch"]):
+            return "http_request"
+        elif any(word in task_lower for word in ["script", "python", "bash"]):
+            return "script"
+        else:
+            return "generic"
+
+    def _extract_parameters_from_task(
+        self,
+        task_description: str
+    ) -> Dict[str, Any]:
+        """
+        Extract parameters from task description.
+
+        Looks for tokens (DATETOKEN, PATHTOKEN, etc.) and creates parameters for them.
+
+        Args:
+            task_description: Task description with tokens
+
+        Returns:
+            Dict of parameter name -> parameter definition
+        """
+        parameters = {}
+
+        # Check for each token type
+        token_map = {
+            "DATETOKEN": {"type": "string", "format": "date", "description": "Date parameter"},
+            "TIMETOKEN": {"type": "string", "format": "time", "description": "Time parameter"},
+            "NUMTOKEN": {"type": "integer", "description": "Numeric parameter"},
+            "PATHTOKEN": {"type": "string", "format": "path", "description": "File path parameter"},
+            "BRANCHTOKEN": {"type": "string", "description": "Git branch name"}
+        }
+
+        for token, param_def in token_map.items():
+            if token in task_description:
+                # Create parameter name from token
+                param_name = token.replace("TOKEN", "").lower()
+                parameters[param_name] = param_def
+
+        return parameters
+
+    def _calculate_priority(self, pattern: WorkflowPattern) -> int:
+        """
+        Calculate suggestion priority (1-5).
+
+        Priority levels:
+        - 5: High frequency (≥7) AND high confidence (≥0.85)
+        - 4: High frequency OR high confidence
+        - 3: Medium frequency (≥5) AND medium confidence (≥0.7)
+        - 2: Medium frequency OR medium confidence
+        - 1: Low frequency OR low confidence
+
+        Args:
+            pattern: Workflow pattern
+
+        Returns:
+            Priority level (1-5)
+        """
+        freq = pattern.frequency
+        conf = pattern.confidence
+
+        if freq >= 7 and conf >= 0.85:
+            return 5
+        elif freq >= 7 or conf >= 0.85:
+            return 4
+        elif freq >= 5 and conf >= 0.7:
+            return 3
+        elif freq >= 5 or conf >= 0.7:
+            return 2
+        else:
+            return 1
+
+    def _generate_description(self, pattern: WorkflowPattern) -> str:
+        """
+        Generate human-readable description for workflow suggestion.
+
+        Args:
+            pattern: Workflow pattern
+
+        Returns:
+            Description string
+        """
+        task_count = len(pattern.task_sequence)
+        freq = pattern.frequency
+
+        # Time period description
+        time_span = (pattern.last_seen - pattern.first_seen).days if pattern.first_seen and pattern.last_seen else 0
+        if time_span <= 7:
+            period = "in the last week"
+        elif time_span <= 30:
+            period = "in the last month"
+        else:
+            period = f"over {time_span} days"
+
+        # Generate description
+        description = (
+            f"Detected recurring workflow with {task_count} steps, "
+            f"executed {freq} times {period}. "
+            f"Confidence: {pattern.confidence:.0%}."
+        )
+
+        return description
+
+    def _detect_triggers(self, pattern: WorkflowPattern) -> List[str]:
+        """
+        Detect potential triggers for workflow execution.
+
+        Analyzes pattern intervals and task content to suggest triggers.
+
+        Args:
+            pattern: Workflow pattern
+
+        Returns:
+            List of trigger descriptions
+        """
+        triggers = []
+
+        # Check temporal patterns
+        if pattern.avg_interval:
+            interval_days = pattern.avg_interval.total_seconds() / 86400
+
+            if 0.9 <= interval_days <= 1.1:  # ~daily
+                triggers.append("daily at detected time")
+            elif 6.5 <= interval_days <= 7.5:  # ~weekly
+                triggers.append("weekly on detected day")
+            elif interval_days < 0.5:  # Multiple times per day
+                triggers.append("on demand (frequent pattern)")
+
+        # Check for contextual triggers in task descriptions
+        task_text = " ".join(pattern.task_sequence).lower()
+
+        if "git" in task_text or "deploy" in task_text:
+            triggers.append("after git push")
+        if "backup" in task_text:
+            triggers.append("scheduled backup time")
+        if "test" in task_text:
+            triggers.append("before deployment")
+
+        # Default trigger
+        if not triggers:
+            triggers.append("manual execution")
+
+        return triggers
+
+    def detect_workflow_execution_opportunities(
+        self,
+        current_context: Dict[str, Any]
+    ) -> List[WorkflowSuggestion]:
+        """
+        Detect when saved workflows should be executed.
+
+        Checks:
+        - Temporal patterns (e.g., daily at 9am)
+        - Contextual triggers (e.g., after git push)
+        - User behavior patterns
+
+        Args:
+            current_context: Dict with keys like:
+                - "time": current datetime
+                - "recent_actions": list of recent user actions
+                - "git_status": git repository status
+                - etc.
+
+        Returns:
+            List of workflow suggestions for current context
+        """
+        opportunities = []
+
+        if not self.workflow_library:
+            return opportunities
+
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            # Get all workflows
+            workflows = self.workflow_library.list_workflows() if hasattr(self.workflow_library, 'list_workflows') else []
 
-            cursor.execute("""
-                SELECT * FROM workflow_suggestions
-                WHERE suggestion_id = ?
-            """, (suggestion_id,))
+            current_time = current_context.get("time", datetime.now())
+            recent_actions = current_context.get("recent_actions", [])
 
-            row = cursor.fetchone()
-            conn.close()
+            for workflow in workflows:
+                # Check temporal triggers
+                if self._check_temporal_trigger(workflow, current_time):
+                    opportunities.append(self._create_execution_suggestion(workflow, "temporal"))
 
-            if not row:
-                return None
+                # Check contextual triggers
+                elif self._check_contextual_trigger(workflow, current_context):
+                    opportunities.append(self._create_execution_suggestion(workflow, "contextual"))
 
-            return WorkflowSuggestion(
-                suggestion_id=row['suggestion_id'],
-                pattern_id=row['pattern_id'],
-                suggested_name=row['suggested_name'],
-                description=row['description'],
-                confidence=row['confidence'],
-                priority=row['priority'],
-                steps=json.loads(row['steps']),
-                parameters=json.loads(row['parameters']),
-                triggers=json.loads(row['triggers']),
-                created_at=datetime.fromisoformat(row['created_at']),
-                status=row['status'],
-                metadata=json.loads(row['metadata'])
-            )
+        except Exception as e:
+            logger.error(f"Error detecting execution opportunities: {e}")
 
-        except sqlite3.Error as e:
-            logger.error(f"Failed to get suggestion: {e}")
-            return None
+        return opportunities
+
+    def _check_temporal_trigger(
+        self,
+        workflow: Any,
+        current_time: datetime
+    ) -> bool:
+        """
+        Check if workflow should be triggered based on time.
+
+        Args:
+            workflow: Workflow object
+            current_time: Current datetime
+
+        Returns:
+            True if temporal trigger matches
+        """
+        # Placeholder - would check workflow schedule/triggers
+        # In real implementation:
+        # - Check if workflow has daily/weekly/monthly schedule
+        # - Check if current time matches schedule
+        # - Check last execution time to avoid duplicates
+
+        return False  # Placeholder
+
+    def _check_contextual_trigger(
+        self,
+        workflow: Any,
+        context: Dict[str, Any]
+    ) -> bool:
+        """
+        Check if workflow should be triggered based on context.
+
+        Args:
+            workflow: Workflow object
+            context: Current context dict
+
+        Returns:
+            True if contextual trigger matches
+        """
+        # Placeholder - would check contextual triggers
+        # In real implementation:
+        # - Check if recent actions match workflow triggers
+        # - Check if git status matches triggers (e.g., "after git push")
+        # - Check if file changes match triggers
+
+        return False  # Placeholder
+
+    def _create_execution_suggestion(
+        self,
+        workflow: Any,
+        trigger_type: str
+    ) -> WorkflowSuggestion:
+        """
+        Create a suggestion to execute a workflow.
+
+        Args:
+            workflow: Workflow to execute
+            trigger_type: Type of trigger ("temporal" or "contextual")
+
+        Returns:
+            WorkflowSuggestion for execution
+        """
+        # Extract workflow details
+        workflow_name = getattr(workflow, 'name', 'Unknown Workflow')
+        workflow_id = getattr(workflow, 'id', str(uuid.uuid4()))
+
+        return WorkflowSuggestion(
+            suggestion_id=str(uuid.uuid4()),
+            pattern_id="",  # Not from pattern
+            suggested_name=f"Execute: {workflow_name}",
+            description=f"Workflow '{workflow_name}' is ready to run ({trigger_type} trigger)",
+            confidence=0.8,
+            priority=3,
+            steps=[],  # Steps already in workflow
+            parameters={},
+            triggers=[trigger_type],
+            created_at=datetime.now(),
+            status="pending",
+            metadata={
+                "trigger_type": trigger_type,
+                "workflow_id": workflow_id
+            }
+        )
+
+    async def store_suggestion(self, suggestion: WorkflowSuggestion) -> bool:
+        """
+        Store a workflow suggestion for later review.
+
+        Args:
+            suggestion: Workflow suggestion to store
+
+        Returns:
+            True if stored successfully
+        """
+        if not self.suggestion_store:
+            logger.warning("No suggestion store available")
+            return False
+
+        try:
+            # Store suggestion (implementation depends on suggestion_store interface)
+            # Placeholder: self.suggestion_store.save(suggestion.to_dict())
+            logger.info(f"Stored suggestion: {suggestion.suggested_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error storing suggestion: {e}")
+            return False
