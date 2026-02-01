@@ -32,6 +32,7 @@ from alpha.workflow.cli import WorkflowCLI
 from alpha.interface.image_input import ImageInputParser
 from alpha.multimodal.image_processor import ImageProcessor
 from alpha.multimodal.image_encoder import ImageEncoder
+from alpha.multimodal.image_memory import ImageMemory
 
 # Initialize logger and console early
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ class CLI:
         self.image_parser = ImageInputParser()
         self.image_processor = ImageProcessor()
         self.image_encoder = ImageEncoder()
+        self.image_memory = ImageMemory()  # SQLite-based image history
 
         # System prompt
         self.system_prompt = """You are Alpha, a Personal Super AI Assistant.
