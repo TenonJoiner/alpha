@@ -18,6 +18,7 @@ from rich.status import Status
 from alpha.core.engine import AlphaEngine
 from alpha.utils.config import load_config
 from alpha.llm.service import LLMService, Message
+from alpha.llm.vision_message import VisionMessage, TextContent, ImageContent, ImageSource
 from alpha.tools.registry import create_default_registry
 from alpha.events.bus import EventType
 from alpha.skills.registry import SkillRegistry
@@ -28,6 +29,9 @@ from alpha.skills import preinstall_builtin_skills
 from alpha.skills.auto_manager import AutoSkillManager
 from alpha.skills.query_classifier import QueryClassifier
 from alpha.workflow.cli import WorkflowCLI
+from alpha.interface.image_input import ImageInputParser
+from alpha.multimodal.image_processor import ImageProcessor
+from alpha.multimodal.image_encoder import ImageEncoder
 
 # Initialize logger and console early
 logger = logging.getLogger(__name__)
@@ -83,6 +87,10 @@ class CLI:
         if VECTOR_MEMORY_AVAILABLE and config and hasattr(config, 'vector_memory'):
             self._initialize_vector_memory(config.vector_memory)
 
+        # Initialize Image Input Support (for multimodal capabilities)
+        self.image_parser = ImageInputParser()
+        self.image_processor = ImageProcessor()
+        self.image_encoder = ImageEncoder()
 
         # System prompt
         self.system_prompt = """You are Alpha, a Personal Super AI Assistant.
@@ -256,6 +264,14 @@ IMPORTANT INSTRUCTIONS:
 
     async def _process_message(self, user_input: str):
         """Process user message and generate response."""
+        # Check for image input first
+        image_input = self.image_parser.parse(user_input)
+
+        if image_input:
+            # Process images and create vision message
+            await self._process_image_message(user_input, image_input)
+            return
+
         # Add user message to history
         user_msg = Message(role="user", content=user_input)
         self.conversation_history.append(user_msg)
@@ -396,6 +412,218 @@ IMPORTANT INSTRUCTIONS:
 
         if iteration >= max_iterations:
             console.print(f"\n[yellow]Warning: Maximum tool iterations reached[/yellow]")
+
+    async def _process_image_message(self, original_input: str, image_input):
+        """
+        Process message with image attachments.
+
+        Args:
+            original_input: Original user input text
+            image_input: Parsed ImageInput object
+        """
+        from rich.table import Table
+
+        # Display image preview metadata
+        console.print("\n[cyan]📷 Image Input Detected[/cyan]")
+
+        table = Table(title="Image Preview", show_header=True, header_style="bold magenta")
+        table.add_column("File", style="cyan")
+        table.add_column("Format", style="green")
+        table.add_column("Size", style="yellow")
+        table.add_column("Dimensions", style="blue")
+
+        image_sources = []
+        for path in image_input.paths:
+            # Get metadata for preview
+            metadata = self.image_parser.get_preview_metadata(path)
+
+            if "error" in metadata:
+                console.print(f"[red]Error loading {path}: {metadata['error']}[/red]")
+                continue
+
+            # Add to preview table
+            table.add_row(
+                metadata['path'],
+                metadata.get('format', 'Unknown'),
+                f"{metadata.get('size_mb', 0)} MB",
+                f"{metadata.get('width', 0)}x{metadata.get('height', 0)}"
+            )
+
+            # Encode image for Vision API
+            try:
+                base64_data = self.image_encoder.encode_image_file(path)
+                media_type = f"image/{metadata.get('format', 'png').lower()}"
+                if media_type == "image/jpg":
+                    media_type = "image/jpeg"
+
+                image_sources.append(ImageSource(
+                    type="base64",
+                    media_type=media_type,
+                    data=base64_data
+                ))
+            except Exception as e:
+                console.print(f"[red]Error encoding {path}: {e}[/red]")
+                logger.error(f"Image encoding error for {path}: {e}", exc_info=True)
+                continue
+
+        console.print(table)
+
+        if not image_sources:
+            console.print("[red]No valid images found. Falling back to text-only mode.[/red]")
+            # Fall back to text-only processing
+            await self._process_message_text_only(original_input)
+            return
+
+        # Build vision message content
+        content_blocks = [
+            TextContent(text=image_input.question)
+        ]
+
+        for source in image_sources:
+            content_blocks.append(ImageContent(source=source))
+
+        # Create vision message
+        vision_msg = VisionMessage(
+            role="user",
+            content=content_blocks
+        )
+
+        # Add to conversation history
+        self.conversation_history.append(vision_msg)
+
+        # Add to vector memory (text only for now)
+        if self.vector_memory_enabled:
+            await self._add_to_vector_memory(image_input.question, role="user")
+
+        # Record in memory (text only)
+        await self.engine.memory_manager.add_conversation(
+            role="user",
+            content=f"{image_input.question} [with {len(image_sources)} image(s)]"
+        )
+
+        # Generate response using vision-capable LLM
+        try:
+            console.print("[dim]Analyzing image(s)...[/dim]")
+
+            response_text = ""
+            async for chunk in self.llm_service.stream_complete(
+                self.conversation_history
+            ):
+                response_text += chunk
+
+            # Display response
+            console.print(f"\n[bold blue]Alpha[/bold blue]: {response_text}")
+
+            # Add assistant response to history
+            assistant_msg = VisionMessage(role="assistant", content=response_text)
+            self.conversation_history.append(assistant_msg)
+
+            # Add to vector memory
+            if self.vector_memory_enabled:
+                await self._add_to_vector_memory(response_text, role="assistant")
+
+            # Record in memory
+            await self.engine.memory_manager.add_conversation(
+                role="assistant",
+                content=response_text
+            )
+
+        except Exception as e:
+            console.print(f"\n[bold red]Error analyzing images:[/bold red] {e}")
+            logger.error(f"Image analysis error: {e}", exc_info=True)
+
+    async def _process_message_text_only(self, user_input: str):
+        """
+        Process text-only message (helper for fallback).
+
+        This is the original text-only processing logic.
+        """
+        # Add user message to history
+        user_msg = Message(role="user", content=user_input)
+        self.conversation_history.append(user_msg)
+
+        # Add to vector memory for future retrieval
+        if self.vector_memory_enabled:
+            await self._add_to_vector_memory(user_input, role="user")
+
+        # Retrieve relevant context from previous conversations
+        if self.vector_memory_enabled:
+            relevant_context = await self._retrieve_relevant_context(user_input, n_results=3)
+            if relevant_context:
+                self._inject_context_into_conversation(relevant_context)
+
+        # Record in memory
+        await self.engine.memory_manager.add_conversation(
+            role="user",
+            content=user_input
+        )
+
+        # Query classification: only match skills for task queries
+        should_match_skills = False
+        if self.auto_skill_manager:
+            query_info = self.query_classifier.classify(user_input)
+            should_match_skills = query_info['needs_skill_matching']
+
+            logger.info(f"Query classified as: {query_info['type']} "
+                       f"(confidence: {query_info['confidence']:.2f}, "
+                       f"needs_skills: {should_match_skills})")
+
+        # Auto-skill: Try to match and load relevant skill (only for task queries)
+        if should_match_skills and self.auto_skill_manager:
+            try:
+                console.print("[dim]Analyzing task for relevant skills...[/dim]")
+                skill_result = await self.auto_skill_manager.process_query(user_input)
+
+                if skill_result:
+                    skill_name = skill_result['skill_name']
+                    skill_context = skill_result['context']
+                    skill_score = skill_result['score']
+
+                    # Show user what skill is being used
+                    console.print(f"[cyan]🎯 Using skill:[/cyan] [bold]{skill_name}[/bold] (relevance: {skill_score:.1f}/10)")
+
+                    # Add skill context to conversation history
+                    skill_msg = Message(role="system", content=skill_context)
+                    self.conversation_history.append(skill_msg)
+
+                    logger.info(f"Auto-loaded skill: {skill_name} (score: {skill_score})")
+                else:
+                    logger.debug("No relevant local skills found for query")
+
+            except Exception as e:
+                logger.warning(f"Auto-skill matching failed: {e}")
+                # Continue without skill context
+
+        # Generate response
+        try:
+            console.print("[dim]Thinking...[/dim]")
+
+            response_text = ""
+            async for chunk in self.llm_service.stream_complete(
+                self.conversation_history
+            ):
+                response_text += chunk
+
+            # Display response
+            console.print(f"\n[bold blue]Alpha[/bold blue]: {response_text}")
+
+            # Add assistant response to history
+            assistant_msg = Message(role="assistant", content=response_text)
+            self.conversation_history.append(assistant_msg)
+
+            # Add to vector memory
+            if self.vector_memory_enabled:
+                await self._add_to_vector_memory(response_text, role="assistant")
+
+            # Record in memory
+            await self.engine.memory_manager.add_conversation(
+                role="assistant",
+                content=response_text
+            )
+
+        except Exception as e:
+            console.print(f"\n[bold red]Error generating response:[/bold red] {e}")
+            logger.error(f"Response generation error: {e}", exc_info=True)
 
     def _initialize_vector_memory(self, vm_config):
         """
