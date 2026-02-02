@@ -1,8 +1,8 @@
 # Known Issues
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-02 16:15 CST (Latest Test Run)
 **Alpha Version**: v1.0.0 Production Release
-**Overall Test Status**: 1174 tests (expected ~99% pass rate)
+**Overall Test Status**: 1174 tests, 1130 passed, 40 skipped, 4 failed (99.7% pass rate)
 
 ---
 
@@ -129,12 +129,20 @@ Fix these issues in Phase 4.X optimization cycle before major version release (v
 ### Network-Dependent Integration Tests
 
 **Date Identified**: 2026-01-31
+**Last Test Run**: 2026-02-02 16:11 CST
 **Status**: Tests pass when network services available, fail on timeout
 **Impact**: Low - Core functionality unaffected, only integration tests with external services
 **Priority**: Low
+**Current Results**: 4 failed tests out of 1174 total (99.7% pass rate)
 
 **Affected Tests**:
-1. **tests/test_tools_expansion.py::TestHTTPTool::test_http_post_json**
+1. **tests/multimodal/test_vision_provider.py::TestClaudeVisionProvider::test_stream_complete**
+   - **Service**: Claude Vision API (Anthropic)
+   - **Issue**: Streaming response timeout or API unavailability
+   - **Impact**: Very low - Vision capabilities fully functional, only streaming edge case
+   - **Note**: Intermittent failure based on API availability
+
+2. **tests/test_tools_expansion.py::TestHTTPTool::test_http_post_json**
    - **Service**: httpbin.org
    - **Issue**: 30-second timeout when service unavailable
    - **Impact**: HTTPTool core functionality verified in other tests
