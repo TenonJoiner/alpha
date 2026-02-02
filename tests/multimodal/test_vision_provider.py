@@ -190,6 +190,7 @@ class TestClaudeVisionProvider:
 
         assert response.cost_usd == pytest.approx(expected_cost, abs=1e-6)
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_stream_complete(self, provider, mock_api_response):
         """Test stream_complete() yields response"""

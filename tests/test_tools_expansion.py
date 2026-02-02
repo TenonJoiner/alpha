@@ -25,6 +25,7 @@ class TestHTTPTool:
     def http_tool(self):
         return HTTPTool()
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_http_get_success(self, http_tool):
         """Test successful GET request"""
@@ -38,6 +39,7 @@ class TestHTTPTool:
         assert result.output["status_code"] == 200
         assert "body" in result.output
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_http_get_with_params(self, http_tool):
         """Test GET with query parameters"""
@@ -50,6 +52,7 @@ class TestHTTPTool:
         assert result.success
         assert result.output["status_code"] == 200
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_http_post_json(self, http_tool):
         """Test POST with JSON body"""
@@ -84,6 +87,7 @@ class TestHTTPTool:
         assert not result.success
         assert "Unsupported HTTP method" in result.error
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_http_timeout(self, http_tool):
         """Test request timeout"""
@@ -96,6 +100,7 @@ class TestHTTPTool:
         assert not result.success
         assert "timed out" in result.error.lower()
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     async def test_http_404(self, http_tool):
         """Test 404 response handling"""
@@ -348,6 +353,7 @@ class TestSearchTool:
     def search_tool(self):
         return SearchTool()
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     @pytest.mark.integration
     @pytest.mark.slow
@@ -359,6 +365,7 @@ class TestSearchTool:
         assert "results" in result.output
         assert isinstance(result.output["results"], list)
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     @pytest.mark.integration
     @pytest.mark.slow
@@ -372,6 +379,7 @@ class TestSearchTool:
         assert result.success
         assert len(result.output["results"]) <= 3
 
+    @pytest.mark.network
     @pytest.mark.asyncio
     @pytest.mark.integration
     @pytest.mark.slow
