@@ -1642,3 +1642,342 @@ async def test_github_tool_get_branch_missing_owner(github_tool):
 
     assert result.success is False
     assert "owner and repo parameters required" in result.error
+
+
+# ===== Repository Management Tests =====
+
+
+def test_client_create_repository(github_client):
+    """Test GitHubClient.create_repository()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {
+            "name": "new-repo",
+            "full_name": "user/new-repo",
+            "owner": {"login": "user", "id": 123},
+            "private": True,
+            "description": "Test repository",
+            "html_url": "https://github.com/user/new-repo",
+            "clone_url": "https://github.com/user/new-repo.git",
+            "ssh_url": "git@github.com:user/new-repo.git",
+            "stargazers_count": 0,
+            "forks_count": 0,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "pushed_at": "2024-01-01T00:00:00Z",
+        }
+
+        repo = github_client.create_repository(
+            name="new-repo",
+            private=True,
+            description="Test repository",
+            auto_init=True,
+            license_template="mit",
+        )
+
+        assert repo.name == "new-repo"
+        assert repo.full_name == "user/new-repo"
+        assert repo.private is True
+        assert repo.description == "Test repository"
+        
+        # Verify API call
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "user/repos"
+        assert call_args[1]["json_data"]["name"] == "new-repo"
+        assert call_args[1]["json_data"]["private"] is True
+
+
+def test_client_create_repository_organization(github_client):
+    """Test GitHubClient.create_repository() for organization."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {
+            "name": "org-repo",
+            "full_name": "myorg/org-repo",
+            "owner": {"login": "myorg", "id": 456},
+            "private": False,
+            "html_url": "https://github.com/myorg/org-repo",
+            "clone_url": "https://github.com/myorg/org-repo.git",
+            "ssh_url": "git@github.com:myorg/org-repo.git",
+            "stargazers_count": 0,
+            "forks_count": 0,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "pushed_at": "2024-01-01T00:00:00Z",
+        }
+
+        repo = github_client.create_repository(
+            name="org-repo", organization="myorg", private=False
+        )
+
+        assert repo.full_name == "myorg/org-repo"
+        
+        # Verify API call uses org endpoint
+        call_args = mock_request.call_args
+        assert call_args[0][1] == "orgs/myorg/repos"
+
+
+def test_client_update_repository(github_client):
+    """Test GitHubClient.update_repository()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {
+            "name": "updated-repo",
+            "full_name": "user/updated-repo",
+            "owner": {"login": "user", "id": 123},
+            "private": True,
+            "description": "Updated description",
+            "homepage": "https://example.com",
+            "archived": False,
+            "html_url": "https://github.com/user/updated-repo",
+            "clone_url": "https://github.com/user/updated-repo.git",
+            "ssh_url": "git@github.com:user/updated-repo.git",
+            "stargazers_count": 10,
+            "forks_count": 5,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-02T00:00:00Z",
+            "pushed_at": "2024-01-02T00:00:00Z",
+        }
+
+        repo = github_client.update_repository(
+            "user",
+            "repo",
+            description="Updated description",
+            homepage="https://example.com",
+            private=True,
+        )
+
+        assert repo.description == "Updated description"
+        assert repo.homepage == "https://example.com"
+        assert repo.private is True
+        
+        # Verify API call
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PATCH"
+        assert call_args[0][1] == "repos/user/repo"
+
+
+def test_client_delete_repository(github_client):
+    """Test GitHubClient.delete_repository()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = None
+
+        result = github_client.delete_repository("user", "old-repo")
+
+        assert result is True
+        mock_request.assert_called_once_with("DELETE", "repos/user/old-repo")
+
+
+def test_client_archive_repository(github_client):
+    """Test GitHubClient.archive_repository()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {
+            "name": "archived-repo",
+            "full_name": "user/archived-repo",
+            "owner": {"login": "user", "id": 123},
+            "archived": True,
+            "html_url": "https://github.com/user/archived-repo",
+            "clone_url": "https://github.com/user/archived-repo.git",
+            "ssh_url": "git@github.com:user/archived-repo.git",
+            "stargazers_count": 10,
+            "forks_count": 5,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-02T00:00:00Z",
+            "pushed_at": "2024-01-02T00:00:00Z",
+        }
+
+        repo = github_client.archive_repository("user", "old-repo")
+
+        assert repo.archived is True
+        
+        # Verify it calls update_repository with archived=True
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PATCH"
+        assert call_args[1]["json_data"]["archived"] is True
+
+
+def test_client_transfer_repository(github_client):
+    """Test GitHubClient.transfer_repository()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {
+            "name": "transferred-repo",
+            "full_name": "new-owner/transferred-repo",
+            "owner": {"login": "new-owner", "id": 789},
+            "html_url": "https://github.com/new-owner/transferred-repo",
+            "clone_url": "https://github.com/new-owner/transferred-repo.git",
+            "ssh_url": "git@github.com:new-owner/transferred-repo.git",
+            "stargazers_count": 10,
+            "forks_count": 5,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-02T00:00:00Z",
+            "pushed_at": "2024-01-02T00:00:00Z",
+        }
+
+        repo = github_client.transfer_repository("old-owner", "repo", "new-owner")
+
+        assert repo.owner.login == "new-owner"
+        assert repo.full_name == "new-owner/transferred-repo"
+        
+        # Verify API call
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "repos/old-owner/repo/transfer"
+        assert call_args[1]["json_data"]["new_owner"] == "new-owner"
+
+
+def test_client_update_topics(github_client):
+    """Test GitHubClient.update_topics()."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_request.return_value = {"names": ["python", "machine-learning", "api"]}
+
+        topics = github_client.update_topics(
+            "user", "repo", ["python", "machine-learning", "api"]
+        )
+
+        assert len(topics) == 3
+        assert "python" in topics
+        assert "machine-learning" in topics
+        
+        # Verify API call
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PUT"
+        assert call_args[0][1] == "repos/user/repo/topics"
+        assert call_args[1]["json_data"]["names"] == ["python", "machine-learning", "api"]
+
+
+@pytest.mark.asyncio
+async def test_github_tool_create_repo_success(github_tool):
+    """Test GitHubTool create_repo operation."""
+    with patch.object(GitHubClient, "create_repository") as mock_create:
+        mock_repo = Mock()
+        mock_repo.full_name = "user/new-repo"
+        mock_repo.html_url = "https://github.com/user/new-repo"
+        mock_repo.clone_url = "https://github.com/user/new-repo.git"
+        mock_repo.private = True
+        mock_repo.description = "Test repo"
+        mock_create.return_value = mock_repo
+
+        result = await github_tool.execute(
+            operation="create_repo",
+            name="new-repo",
+            private=True,
+            description="Test repo",
+        )
+
+        assert result.success is True
+        assert result.output["name"] == "user/new-repo"
+        assert result.output["private"] is True
+
+
+@pytest.mark.asyncio
+async def test_github_tool_create_repo_missing_name(github_tool):
+    """Test GitHubTool create_repo operation - missing name."""
+    result = await github_tool.execute(
+        operation="create_repo",
+        # Missing name parameter
+    )
+
+    assert result.success is False
+    assert "name parameter required" in result.error
+
+
+@pytest.mark.asyncio
+async def test_github_tool_update_repo_success(github_tool):
+    """Test GitHubTool update_repo operation."""
+    with patch.object(GitHubClient, "update_repository") as mock_update:
+        mock_repo = Mock()
+        mock_repo.full_name = "user/repo"
+        mock_repo.description = "Updated description"
+        mock_repo.homepage = "https://example.com"
+        mock_repo.private = True
+        mock_repo.archived = False
+        mock_repo.html_url = "https://github.com/user/repo"
+        mock_update.return_value = mock_repo
+
+        result = await github_tool.execute(
+            operation="update_repo",
+            owner="user",
+            repo="repo",
+            description="Updated description",
+            private=True,
+        )
+
+        assert result.success is True
+        assert result.output["description"] == "Updated description"
+        assert result.output["private"] is True
+
+
+@pytest.mark.asyncio
+async def test_github_tool_delete_repo_success(github_tool):
+    """Test GitHubTool delete_repo operation."""
+    with patch.object(GitHubClient, "delete_repository") as mock_delete:
+        mock_delete.return_value = True
+
+        result = await github_tool.execute(
+            operation="delete_repo",
+            owner="user",
+            repo="old-repo",
+        )
+
+        assert result.success is True
+        assert result.output["deleted"] is True
+        assert result.output["repository"] == "user/old-repo"
+
+
+@pytest.mark.asyncio
+async def test_github_tool_archive_repo_success(github_tool):
+    """Test GitHubTool archive_repo operation."""
+    with patch.object(GitHubClient, "archive_repository") as mock_archive:
+        mock_repo = Mock()
+        mock_repo.full_name = "user/repo"
+        mock_repo.archived = True
+        mock_repo.html_url = "https://github.com/user/repo"
+        mock_archive.return_value = mock_repo
+
+        result = await github_tool.execute(
+            operation="archive_repo",
+            owner="user",
+            repo="old-repo",
+        )
+
+        assert result.success is True
+        assert result.output["archived"] is True
+
+
+@pytest.mark.asyncio
+async def test_github_tool_transfer_repo_success(github_tool):
+    """Test GitHubTool transfer_repo operation."""
+    with patch.object(GitHubClient, "transfer_repository") as mock_transfer:
+        mock_repo = Mock()
+        mock_repo.full_name = "new-owner/repo"
+        mock_repo.owner = Mock()
+        mock_repo.owner.login = "new-owner"
+        mock_repo.html_url = "https://github.com/new-owner/repo"
+        mock_transfer.return_value = mock_repo
+
+        result = await github_tool.execute(
+            operation="transfer_repo",
+            owner="old-owner",
+            repo="repo",
+            new_owner="new-owner",
+        )
+
+        assert result.success is True
+        assert result.output["new_owner"] == "new-owner"
+        assert result.output["old_owner"] == "old-owner"
+
+
+@pytest.mark.asyncio
+async def test_github_tool_update_topics_success(github_tool):
+    """Test GitHubTool update_topics operation."""
+    with patch.object(GitHubClient, "update_topics") as mock_topics:
+        mock_topics.return_value = ["python", "api", "rest"]
+
+        result = await github_tool.execute(
+            operation="update_topics",
+            owner="user",
+            repo="repo",
+            topics=["python", "api", "rest"],
+        )
+
+        assert result.success is True
+        assert len(result.output["topics"]) == 3
+        assert "python" in result.output["topics"]

@@ -58,6 +58,7 @@ class Repository:
     open_issues_count: int
     default_branch: str
     language: Optional[str] = None
+    homepage: Optional[str] = None
     topics: List[str] = field(default_factory=list)
     clone_url: str = ""
     ssh_url: str = ""
@@ -91,6 +92,7 @@ class Repository:
             open_issues_count=data.get("open_issues_count", 0),
             default_branch=data.get("default_branch", "main"),
             language=data.get("language"),
+            homepage=data.get("homepage"),
             topics=data.get("topics", []),
             clone_url=data.get("clone_url", ""),
             ssh_url=data.get("ssh_url", ""),

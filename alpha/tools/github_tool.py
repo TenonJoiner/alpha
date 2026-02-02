@@ -27,6 +27,12 @@ class GitHubTool(Tool):
     Supported operations:
     - list_repos: List user repositories
     - get_repo: Get repository information
+    - create_repo: Create new repository
+    - update_repo: Update repository settings
+    - delete_repo: Delete repository (permanent)
+    - archive_repo: Archive repository (safer alternative)
+    - transfer_repo: Transfer repository to new owner
+    - update_topics: Update repository topics
     - list_issues: List repository issues
     - get_issue: Get issue details
     - create_issue: Create new issue
@@ -177,6 +183,201 @@ class GitHubTool(Tool):
                         "archived": repository.archived,
                     },
                     metadata={"operation": "get_repo", "repository": f"{owner}/{repo}"},
+                )
+
+            # ===== Repository Management Operations =====
+            elif operation == "create_repo":
+                name = kwargs.get("name")
+                if not name:
+                    return ToolResult(
+                        success=False, output=None, error="name parameter required"
+                    )
+
+                private = kwargs.get("private", False)
+                description = kwargs.get("description")
+                homepage = kwargs.get("homepage")
+                auto_init = kwargs.get("auto_init", False)
+                gitignore_template = kwargs.get("gitignore_template")
+                license_template = kwargs.get("license_template")
+                organization = kwargs.get("organization")
+
+                repository = self.client.create_repository(
+                    name=name,
+                    private=private,
+                    description=description,
+                    homepage=homepage,
+                    auto_init=auto_init,
+                    gitignore_template=gitignore_template,
+                    license_template=license_template,
+                    organization=organization,
+                )
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "name": repository.full_name,
+                        "url": repository.html_url,
+                        "clone_url": repository.clone_url,
+                        "private": repository.private,
+                        "description": repository.description,
+                    },
+                    metadata={"operation": "create_repo", "repository": repository.full_name},
+                )
+
+            elif operation == "update_repo":
+                if not owner or not repo:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner and repo parameters required",
+                    )
+
+                # Extract update parameters
+                name = kwargs.get("name")
+                description = kwargs.get("description")
+                homepage = kwargs.get("homepage")
+                private = kwargs.get("private")
+                has_issues = kwargs.get("has_issues")
+                has_wiki = kwargs.get("has_wiki")
+                has_projects = kwargs.get("has_projects")
+                default_branch = kwargs.get("default_branch")
+                archived = kwargs.get("archived")
+
+                repository = self.client.update_repository(
+                    owner=owner,
+                    repo=repo,
+                    name=name,
+                    description=description,
+                    homepage=homepage,
+                    private=private,
+                    has_issues=has_issues,
+                    has_wiki=has_wiki,
+                    has_projects=has_projects,
+                    default_branch=default_branch,
+                    archived=archived,
+                )
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "name": repository.full_name,
+                        "description": repository.description,
+                        "homepage": repository.homepage,
+                        "private": repository.private,
+                        "archived": repository.archived,
+                        "url": repository.html_url,
+                    },
+                    metadata={
+                        "operation": "update_repo",
+                        "repository": f"{owner}/{repo}",
+                        "updated_fields": [
+                            k for k, v in {
+                                "name": name,
+                                "description": description,
+                                "homepage": homepage,
+                                "private": private,
+                                "has_issues": has_issues,
+                                "has_wiki": has_wiki,
+                                "has_projects": has_projects,
+                                "default_branch": default_branch,
+                                "archived": archived,
+                            }.items() if v is not None
+                        ],
+                    },
+                )
+
+            elif operation == "delete_repo":
+                if not owner or not repo:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner and repo parameters required",
+                    )
+
+                success = self.client.delete_repository(owner, repo)
+
+                return ToolResult(
+                    success=success,
+                    output={"deleted": success, "repository": f"{owner}/{repo}"},
+                    metadata={"operation": "delete_repo", "repository": f"{owner}/{repo}"},
+                )
+
+            elif operation == "archive_repo":
+                if not owner or not repo:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner and repo parameters required",
+                    )
+
+                repository = self.client.archive_repository(owner, repo)
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "name": repository.full_name,
+                        "archived": repository.archived,
+                        "url": repository.html_url,
+                    },
+                    metadata={"operation": "archive_repo", "repository": f"{owner}/{repo}"},
+                )
+
+            elif operation == "transfer_repo":
+                if not owner or not repo:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner and repo parameters required",
+                    )
+
+                new_owner = kwargs.get("new_owner")
+                if not new_owner:
+                    return ToolResult(
+                        success=False, output=None, error="new_owner parameter required"
+                    )
+
+                repository = self.client.transfer_repository(owner, repo, new_owner)
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "name": repository.full_name,
+                        "old_owner": owner,
+                        "new_owner": repository.owner.login,
+                        "url": repository.html_url,
+                    },
+                    metadata={
+                        "operation": "transfer_repo",
+                        "repository": f"{owner}/{repo}",
+                        "new_owner": new_owner,
+                    },
+                )
+
+            elif operation == "update_topics":
+                if not owner or not repo:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner and repo parameters required",
+                    )
+
+                topics = kwargs.get("topics", [])
+                if not isinstance(topics, list):
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="topics parameter must be a list",
+                    )
+
+                updated_topics = self.client.update_topics(owner, repo, topics)
+
+                return ToolResult(
+                    success=True,
+                    output={"topics": updated_topics, "count": len(updated_topics)},
+                    metadata={
+                        "operation": "update_topics",
+                        "repository": f"{owner}/{repo}",
+                    },
                 )
 
             # ===== Issue Operations =====

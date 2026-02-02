@@ -148,6 +148,122 @@ You> Show me info about the React repository
 - Default branch
 - Clone URLs
 
+#### Create Repository
+
+```bash
+# Create a personal repository
+You> github create_repo name="my-project" private=true description="My awesome project"
+
+# Create with templates
+You> github create_repo name="python-app" auto_init=true gitignore_template="Python" license_template="mit"
+
+# Create organization repository
+You> github create_repo name="team-project" organization="myorg" private=false
+
+# Natural language
+You> Create a new private repository called "backend-api" with MIT license
+```
+
+**Parameters**:
+- `name` (required): Repository name
+- `private` (optional): Public (false) or private (true), default: false
+- `description` (optional): Repository description
+- `homepage` (optional): Project homepage URL
+- `auto_init` (optional): Initialize with README, default: false
+- `gitignore_template` (optional): Language name (e.g., "Python", "Node")
+- `license_template` (optional): License identifier (e.g., "mit", "apache-2.0")
+- `organization` (optional): Create under organization instead of user
+
+#### Update Repository Settings
+
+```bash
+# Update description and homepage
+You> github update_repo owner=me repo=myrepo description="Updated description" homepage="https://example.com"
+
+# Change visibility to private
+You> github update_repo owner=me repo=myrepo private=true
+
+# Enable/disable features
+You> github update_repo owner=me repo=myrepo has_issues=true has_wiki=false
+
+# Change default branch
+You> github update_repo owner=me repo=myrepo default_branch="main"
+
+# Natural language
+You> Make my repository "backend-api" private and add description "REST API backend"
+```
+
+**Parameters**:
+- `name` (optional): Rename repository
+- `description` (optional): Update description
+- `homepage` (optional): Update homepage URL
+- `private` (optional): Change visibility
+- `has_issues` (optional): Enable/disable issues
+- `has_wiki` (optional): Enable/disable wiki
+- `has_projects` (optional): Enable/disable projects
+- `default_branch` (optional): Change default branch
+- `archived` (optional): Archive repository
+
+#### Archive Repository
+
+```bash
+# Archive repository (safer than deleting)
+You> github archive_repo owner=me repo=old-project
+
+# Natural language
+You> Archive my old-project repository
+```
+
+**Note**: Archived repositories become read-only. This is the recommended alternative to deletion for preserving history.
+
+#### Delete Repository
+
+```bash
+# Delete repository permanently
+You> github delete_repo owner=me repo=temporary-test
+
+# Natural language
+You> Delete my temporary-test repository
+```
+
+**⚠️ WARNING**: Deletion is permanent and cannot be undone. Consider archiving instead.
+
+#### Transfer Repository
+
+```bash
+# Transfer to another user
+You> github transfer_repo owner=me repo=project new_owner="newuser"
+
+# Transfer to organization
+You> github transfer_repo owner=me repo=project new_owner="myorg"
+
+# Natural language
+You> Transfer my project repository to organization "myorg"
+```
+
+**Requirements**:
+- You must have admin permissions on the repository
+- Target user/organization must accept the transfer
+- Repository collaborators and teams will be updated automatically
+
+#### Update Repository Topics
+
+```bash
+# Set repository topics
+You> github update_topics owner=me repo=myrepo topics=["python", "api", "rest"]
+
+# Clear all topics
+You> github update_topics owner=me repo=myrepo topics=[]
+
+# Natural language
+You> Add topics "machine-learning" and "tensorflow" to my project
+```
+
+**Topic Rules**:
+- Maximum 20 topics per repository
+- Topics must be lowercase, alphanumeric (hyphens and underscores allowed)
+- Each topic max 50 characters
+
 ---
 
 ### Issue Management

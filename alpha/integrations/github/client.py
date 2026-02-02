@@ -954,6 +954,298 @@ class GitHubClient:
         data = self._make_request("GET", endpoint)
         return Branch.from_dict(data)
 
+    # ===== Repository Management Operations =====
+
+    def create_repository(
+        self,
+        name: str,
+        private: bool = False,
+        description: Optional[str] = None,
+        homepage: Optional[str] = None,
+        auto_init: bool = False,
+        gitignore_template: Optional[str] = None,
+        license_template: Optional[str] = None,
+        organization: Optional[str] = None,
+    ) -> Repository:
+        """
+        Create a new repository.
+
+        Args:
+            name: Repository name
+            private: Whether repository is private (default: False)
+            description: Repository description
+            homepage: Repository homepage URL
+            auto_init: Initialize with README (default: False)
+            gitignore_template: Gitignore template name (e.g., "Python", "Node")
+            license_template: License template name (e.g., "mit", "apache-2.0")
+            organization: Organization name (creates org repo if provided)
+
+        Returns:
+            Repository object for newly created repository
+
+        Raises:
+            GitHubValidationError: If repository name is invalid
+            GitHubPermissionError: If lacking permissions
+
+        Example:
+            # Create personal repository
+            repo = client.create_repository(
+                name="my-project",
+                private=True,
+                description="My awesome project",
+                auto_init=True,
+                license_template="mit"
+            )
+
+            # Create organization repository
+            repo = client.create_repository(
+                name="org-project",
+                organization="my-org",
+                private=False
+            )
+        """
+        if not name or not name.strip():
+            raise GitHubValidationError("Repository name cannot be empty")
+
+        # Prepare request data
+        json_data = {
+            "name": name.strip(),
+            "private": private,
+            "auto_init": auto_init,
+        }
+
+        if description:
+            json_data["description"] = description
+        if homepage:
+            json_data["homepage"] = homepage
+        if gitignore_template:
+            json_data["gitignore_template"] = gitignore_template
+        if license_template:
+            json_data["license_template"] = license_template
+
+        # Determine endpoint (user or organization)
+        if organization:
+            endpoint = f"orgs/{organization}/repos"
+        else:
+            endpoint = "user/repos"
+
+        data = self._make_request("POST", endpoint, json_data=json_data)
+        return Repository.from_dict(data)
+
+    def update_repository(
+        self,
+        owner: str,
+        repo: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        homepage: Optional[str] = None,
+        private: Optional[bool] = None,
+        has_issues: Optional[bool] = None,
+        has_wiki: Optional[bool] = None,
+        has_projects: Optional[bool] = None,
+        default_branch: Optional[str] = None,
+        archived: Optional[bool] = None,
+    ) -> Repository:
+        """
+        Update repository settings.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            name: New repository name
+            description: New description
+            homepage: New homepage URL
+            private: Change visibility to private
+            has_issues: Enable/disable issues
+            has_wiki: Enable/disable wiki
+            has_projects: Enable/disable projects
+            default_branch: Change default branch
+            archived: Archive/unarchive repository
+
+        Returns:
+            Updated Repository object
+
+        Raises:
+            GitHubPermissionError: If lacking permissions
+            GitHubNotFoundError: If repository not found
+
+        Example:
+            # Update description and homepage
+            repo = client.update_repository(
+                "owner", "repo",
+                description="Updated description",
+                homepage="https://example.com"
+            )
+
+            # Archive repository
+            repo = client.update_repository("owner", "repo", archived=True)
+
+            # Change visibility
+            repo = client.update_repository("owner", "repo", private=True)
+        """
+        endpoint = f"repos/{owner}/{repo}"
+        json_data = {}
+
+        if name is not None:
+            json_data["name"] = name
+        if description is not None:
+            json_data["description"] = description
+        if homepage is not None:
+            json_data["homepage"] = homepage
+        if private is not None:
+            json_data["private"] = private
+        if has_issues is not None:
+            json_data["has_issues"] = has_issues
+        if has_wiki is not None:
+            json_data["has_wiki"] = has_wiki
+        if has_projects is not None:
+            json_data["has_projects"] = has_projects
+        if default_branch is not None:
+            json_data["default_branch"] = default_branch
+        if archived is not None:
+            json_data["archived"] = archived
+
+        if not json_data:
+            raise GitHubValidationError("At least one update parameter must be provided")
+
+        data = self._make_request("PATCH", endpoint, json_data=json_data)
+        return Repository.from_dict(data)
+
+    def delete_repository(self, owner: str, repo: str) -> bool:
+        """
+        Delete a repository.
+
+        WARNING: This is a destructive operation and cannot be undone.
+        Use archive_repository() as a safer alternative.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+
+        Returns:
+            True if successfully deleted
+
+        Raises:
+            GitHubPermissionError: If lacking delete permissions
+            GitHubNotFoundError: If repository not found
+
+        Example:
+            # Delete repository (use with caution!)
+            success = client.delete_repository("owner", "old-repo")
+        """
+        endpoint = f"repos/{owner}/{repo}"
+        self._make_request("DELETE", endpoint)
+        return True
+
+    def archive_repository(self, owner: str, repo: str) -> Repository:
+        """
+        Archive a repository (safer alternative to deletion).
+
+        Archived repositories are read-only and cannot be modified.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+
+        Returns:
+            Updated Repository object with archived=True
+
+        Example:
+            # Archive repository instead of deleting
+            repo = client.archive_repository("owner", "old-repo")
+            assert repo.archived
+        """
+        return self.update_repository(owner, repo, archived=True)
+
+    def transfer_repository(
+        self, owner: str, repo: str, new_owner: str
+    ) -> Repository:
+        """
+        Transfer repository to another user or organization.
+
+        Args:
+            owner: Current repository owner
+            repo: Repository name
+            new_owner: New owner (user or organization name)
+
+        Returns:
+            Repository object with updated owner
+
+        Raises:
+            GitHubPermissionError: If lacking transfer permissions
+            GitHubNotFoundError: If repository or new owner not found
+            GitHubValidationError: If transfer not allowed
+
+        Example:
+            # Transfer to user
+            repo = client.transfer_repository("old-owner", "repo", "new-owner")
+
+            # Transfer to organization
+            repo = client.transfer_repository("user", "repo", "my-org")
+        """
+        if not new_owner or not new_owner.strip():
+            raise GitHubValidationError("New owner cannot be empty")
+
+        endpoint = f"repos/{owner}/{repo}/transfer"
+        json_data = {"new_owner": new_owner.strip()}
+
+        data = self._make_request("POST", endpoint, json_data=json_data)
+        return Repository.from_dict(data)
+
+    def update_topics(
+        self, owner: str, repo: str, topics: List[str]
+    ) -> List[str]:
+        """
+        Replace all repository topics.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            topics: List of topic strings (lowercase, alphanumeric, max 20 topics)
+
+        Returns:
+            List of updated topics
+
+        Raises:
+            GitHubValidationError: If topics are invalid
+
+        Example:
+            # Set repository topics
+            topics = client.update_topics(
+                "owner", "repo",
+                ["python", "machine-learning", "api"]
+            )
+
+            # Clear all topics
+            topics = client.update_topics("owner", "repo", [])
+        """
+        # Validate topics
+        if not isinstance(topics, list):
+            raise GitHubValidationError("Topics must be a list")
+
+        if len(topics) > 20:
+            raise GitHubValidationError("Maximum 20 topics allowed")
+
+        # Validate each topic
+        for topic in topics:
+            if not isinstance(topic, str):
+                raise GitHubValidationError("All topics must be strings")
+            if len(topic) > 50:
+                raise GitHubValidationError(f"Topic '{topic}' exceeds 50 characters")
+            if not topic.replace("-", "").replace("_", "").isalnum():
+                raise GitHubValidationError(
+                    f"Topic '{topic}' contains invalid characters (only alphanumeric, hyphen, underscore)"
+                )
+
+        endpoint = f"repos/{owner}/{repo}/topics"
+        json_data = {"names": [t.lower() for t in topics]}
+
+        # Topics API requires custom Accept header
+        headers = {"Accept": "application/vnd.github.mercy-preview+json"}
+
+        data = self._make_request("PUT", endpoint, json_data=json_data, headers=headers)
+        return data.get("names", [])
+
     # ===== Utility Methods =====
 
     def get_rate_limit(self) -> Dict[str, Any]:
