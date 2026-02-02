@@ -35,6 +35,10 @@ class GitHubTool(Tool):
     - list_prs: List pull requests
     - get_pr: Get pull request details
     - create_pr: Create new pull request
+    - update_pr: Update existing pull request (title, body, state, base)
+    - merge_pr: Merge pull request (merge, squash, or rebase)
+    - create_review: Create review on pull request (APPROVE, REQUEST_CHANGES, COMMENT)
+    - list_reviews: List reviews on pull request
     - list_commits: List repository commits
     - get_commit: Get commit details
     - rate_limit: Check API rate limit status
@@ -545,6 +549,223 @@ class GitHubTool(Tool):
                     metadata={
                         "operation": "create_pr",
                         "repository": f"{owner}/{repo}",
+                    },
+                )
+
+            elif operation == "update_pr":
+                if not owner or not repo or number is None:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner, repo, and number parameters required",
+                    )
+
+                # Extract update parameters
+                title = kwargs.get("title")
+                body = kwargs.get("body")
+                state = kwargs.get("state")
+                base = kwargs.get("base")
+
+                # Validate that at least one parameter is provided
+                if not any([title, body, state, base]):
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="At least one of title, body, state, or base must be provided",
+                    )
+
+                # Validate state parameter
+                if state and state not in ["open", "closed"]:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error=f"Invalid state '{state}'. Must be 'open' or 'closed'",
+                    )
+
+                pr = self.client.update_pull_request(
+                    owner=owner,
+                    repo=repo,
+                    pr_number=number,
+                    title=title,
+                    body=body,
+                    state=state,
+                    base=base,
+                )
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "number": pr.number,
+                        "title": pr.title,
+                        "state": pr.state,
+                        "body": pr.body,
+                        "head_ref": pr.head_ref,
+                        "base_ref": pr.base_ref,
+                        "draft": pr.draft,
+                        "merged": pr.merged,
+                        "updated_at": pr.updated_at.isoformat() if pr.updated_at else None,
+                        "url": pr.html_url,
+                    },
+                    metadata={
+                        "operation": "update_pr",
+                        "repository": f"{owner}/{repo}",
+                        "pr_number": number,
+                        "updated_fields": [
+                            k for k, v in {
+                                "title": title,
+                                "body": body,
+                                "state": state,
+                                "base": base
+                            }.items() if v is not None
+                        ],
+                    },
+                )
+
+            elif operation == "merge_pr":
+                if not owner or not repo or number is None:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner, repo, and number parameters required",
+                    )
+
+                commit_title = kwargs.get("commit_title")
+                commit_message = kwargs.get("commit_message")
+                merge_method = kwargs.get("merge_method", "merge")
+
+                # Validate merge method
+                valid_methods = ["merge", "squash", "rebase"]
+                if merge_method not in valid_methods:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error=f"Invalid merge_method '{merge_method}'. Must be one of: {', '.join(valid_methods)}",
+                    )
+
+                result = self.client.merge_pull_request(
+                    owner=owner,
+                    repo=repo,
+                    pr_number=number,
+                    commit_title=commit_title,
+                    commit_message=commit_message,
+                    merge_method=merge_method,
+                )
+
+                return ToolResult(
+                    success=result.get("merged", False),
+                    output={
+                        "sha": result.get("sha"),
+                        "merged": result.get("merged", False),
+                        "message": result.get("message", ""),
+                        "merge_method": merge_method,
+                    },
+                    metadata={
+                        "operation": "merge_pr",
+                        "repository": f"{owner}/{repo}",
+                        "pr_number": number,
+                    },
+                )
+
+            elif operation == "create_review":
+                if not owner or not repo or number is None:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner, repo, and number parameters required",
+                    )
+
+                event = kwargs.get("event")
+                if not event:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="event parameter required (APPROVE, REQUEST_CHANGES, or COMMENT)",
+                    )
+
+                # Validate event type
+                valid_events = ["APPROVE", "REQUEST_CHANGES", "COMMENT"]
+                if event not in valid_events:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error=f"Invalid event '{event}'. Must be one of: {', '.join(valid_events)}",
+                    )
+
+                body = kwargs.get("body")
+                comments = kwargs.get("comments")
+
+                # Body is required for APPROVE and REQUEST_CHANGES
+                if event in ["APPROVE", "REQUEST_CHANGES"] and not body:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error=f"'body' is required when event is '{event}'",
+                    )
+
+                review = self.client.create_review(
+                    owner=owner,
+                    repo=repo,
+                    pr_number=number,
+                    event=event,
+                    body=body,
+                    comments=comments,
+                )
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "id": review.get("id"),
+                        "state": review.get("state"),
+                        "body": review.get("body"),
+                        "user": review.get("user", {}).get("login"),
+                        "submitted_at": review.get("submitted_at"),
+                        "html_url": review.get("html_url"),
+                    },
+                    metadata={
+                        "operation": "create_review",
+                        "repository": f"{owner}/{repo}",
+                        "pr_number": number,
+                        "event": event,
+                    },
+                )
+
+            elif operation == "list_reviews":
+                if not owner or not repo or number is None:
+                    return ToolResult(
+                        success=False,
+                        output=None,
+                        error="owner, repo, and number parameters required",
+                    )
+
+                max_pages = kwargs.get("max_pages", 3)
+
+                reviews = self.client.list_reviews(
+                    owner=owner,
+                    repo=repo,
+                    pr_number=number,
+                    max_pages=max_pages,
+                )
+
+                return ToolResult(
+                    success=True,
+                    output={
+                        "count": len(reviews),
+                        "reviews": [
+                            {
+                                "id": r.get("id"),
+                                "state": r.get("state"),
+                                "body": r.get("body"),
+                                "user": r.get("user", {}).get("login"),
+                                "submitted_at": r.get("submitted_at"),
+                                "html_url": r.get("html_url"),
+                            }
+                            for r in reviews
+                        ],
+                    },
+                    metadata={
+                        "operation": "list_reviews",
+                        "repository": f"{owner}/{repo}",
+                        "pr_number": number,
                     },
                 )
 

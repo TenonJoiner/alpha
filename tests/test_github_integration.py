@@ -1024,5 +1024,431 @@ async def test_github_tool_update_issue_assignees(github_tool):
         assert "assignees" in result.metadata["updated_fields"]
 
 
+# ===== Phase 11.2.2.2: Advanced PR Operations Tests =====
+
+
+def test_client_update_pull_request(github_client):
+    """Test GitHubClient update_pull_request method."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_pr_data = {
+            "number": 42,
+            "title": "Updated PR Title",
+            "body": "Updated description",
+            "state": "open",
+            "user": {"login": "author"},
+            "head": {"ref": "feature-branch"},
+            "base": {"ref": "main"},
+            "draft": False,
+            "merged": False,
+            "mergeable": True,
+            "mergeable_state": "clean",
+            "labels": [],
+            "assignees": [],
+            "commits": 5,
+            "additions": 100,
+            "deletions": 50,
+            "changed_files": 3,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-02T00:00:00Z",
+            "merged_at": None,
+            "html_url": "https://github.com/user/repo/pull/42",
+        }
+        mock_request.return_value = mock_pr_data
+
+        pr = github_client.update_pull_request(
+            owner="user",
+            repo="repo",
+            pr_number=42,
+            title="Updated PR Title",
+            body="Updated description",
+        )
+
+        mock_request.assert_called_once_with(
+            "PATCH",
+            "repos/user/repo/pulls/42",
+            json_data={"title": "Updated PR Title", "body": "Updated description"},
+        )
+        assert pr.number == 42
+        assert pr.title == "Updated PR Title"
+
+
+def test_client_update_pull_request_close(github_client):
+    """Test GitHubClient update_pull_request method - close PR."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_pr_data = {
+            "number": 42,
+            "title": "Test PR",
+            "body": "Test",
+            "state": "closed",
+            "user": {"login": "author"},
+            "head": {"ref": "feature"},
+            "base": {"ref": "main"},
+            "draft": False,
+            "merged": False,
+            "mergeable": True,
+            "mergeable_state": "clean",
+            "labels": [],
+            "assignees": [],
+            "commits": 1,
+            "additions": 10,
+            "deletions": 5,
+            "changed_files": 1,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-02T00:00:00Z",
+            "merged_at": None,
+            "html_url": "https://github.com/user/repo/pull/42",
+        }
+        mock_request.return_value = mock_pr_data
+
+        pr = github_client.update_pull_request(
+            owner="user", repo="repo", pr_number=42, state="closed"
+        )
+
+        assert pr.state == "closed"
+
+
+def test_client_update_pull_request_validation_error(github_client):
+    """Test GitHubClient update_pull_request method - validation errors."""
+    # Test invalid state
+    with pytest.raises(GitHubValidationError, match="Invalid state"):
+        github_client.update_pull_request(
+            owner="user", repo="repo", pr_number=42, state="invalid"
+        )
+
+    # Test no parameters provided
+    with pytest.raises(GitHubValidationError, match="At least one parameter"):
+        github_client.update_pull_request(owner="user", repo="repo", pr_number=42)
+
+
+def test_client_merge_pull_request(github_client):
+    """Test GitHubClient merge_pull_request method."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_merge_data = {
+            "sha": "abc123def456",
+            "merged": True,
+            "message": "Pull Request successfully merged",
+        }
+        mock_request.return_value = mock_merge_data
+
+        result = github_client.merge_pull_request(
+            owner="user",
+            repo="repo",
+            pr_number=42,
+            commit_title="Merge feature X",
+            merge_method="squash",
+        )
+
+        mock_request.assert_called_once_with(
+            "PUT",
+            "repos/user/repo/pulls/42/merge",
+            json_data={
+                "merge_method": "squash",
+                "commit_title": "Merge feature X",
+            },
+        )
+        assert result["merged"] is True
+        assert result["sha"] == "abc123def456"
+
+
+def test_client_merge_pull_request_invalid_method(github_client):
+    """Test GitHubClient merge_pull_request method - invalid merge method."""
+    with pytest.raises(GitHubValidationError, match="Invalid merge_method"):
+        github_client.merge_pull_request(
+            owner="user", repo="repo", pr_number=42, merge_method="invalid"
+        )
+
+
+def test_client_create_review(github_client):
+    """Test GitHubClient create_review method."""
+    with patch.object(github_client, "_make_request") as mock_request:
+        mock_review_data = {
+            "id": 123456,
+            "state": "APPROVED",
+            "body": "Looks good to me!",
+            "user": {"login": "reviewer"},
+            "submitted_at": "2024-01-02T00:00:00Z",
+            "html_url": "https://github.com/user/repo/pull/42#pullrequestreview-123456",
+        }
+        mock_request.return_value = mock_review_data
+
+        result = github_client.create_review(
+            owner="user",
+            repo="repo",
+            pr_number=42,
+            event="APPROVE",
+            body="Looks good to me!",
+        )
+
+        mock_request.assert_called_once_with(
+            "POST",
+            "repos/user/repo/pulls/42/reviews",
+            json_data={"event": "APPROVE", "body": "Looks good to me!"},
+        )
+        assert result["state"] == "APPROVED"
+        assert result["id"] == 123456
+
+
+def test_client_create_review_invalid_event(github_client):
+    """Test GitHubClient create_review method - invalid event."""
+    with pytest.raises(GitHubValidationError, match="Invalid event"):
+        github_client.create_review(
+            owner="user", repo="repo", pr_number=42, event="INVALID"
+        )
+
+
+def test_client_create_review_missing_body(github_client):
+    """Test GitHubClient create_review method - missing body for APPROVE."""
+    with pytest.raises(GitHubValidationError, match="'body' is required"):
+        github_client.create_review(
+            owner="user", repo="repo", pr_number=42, event="APPROVE"
+        )
+
+
+def test_client_list_reviews(github_client):
+    """Test GitHubClient list_reviews method."""
+    with patch.object(github_client, "_paginate") as mock_paginate:
+        mock_reviews_data = [
+            {
+                "id": 123456,
+                "state": "APPROVED",
+                "body": "LGTM",
+                "user": {"login": "reviewer1"},
+                "submitted_at": "2024-01-02T00:00:00Z",
+                "html_url": "https://github.com/user/repo/pull/42#review-123456",
+            },
+            {
+                "id": 123457,
+                "state": "CHANGES_REQUESTED",
+                "body": "Please fix",
+                "user": {"login": "reviewer2"},
+                "submitted_at": "2024-01-03T00:00:00Z",
+                "html_url": "https://github.com/user/repo/pull/42#review-123457",
+            },
+        ]
+        mock_paginate.return_value = mock_reviews_data
+
+        reviews = github_client.list_reviews(owner="user", repo="repo", pr_number=42)
+
+        mock_paginate.assert_called_once_with(
+            "repos/user/repo/pulls/42/reviews", max_pages=3
+        )
+        assert len(reviews) == 2
+        assert reviews[0]["state"] == "APPROVED"
+        assert reviews[1]["state"] == "CHANGES_REQUESTED"
+
+
+@pytest.mark.asyncio
+async def test_github_tool_update_pr_success(github_tool):
+    """Test GitHubTool update_pr operation - successful update."""
+    with patch.object(GitHubClient, "update_pull_request") as mock_update:
+        mock_pr = Mock()
+        mock_pr.number = 42
+        mock_pr.title = "Updated PR Title"
+        mock_pr.body = "Updated description"
+        mock_pr.state = "open"
+        mock_pr.head_ref = "feature"
+        mock_pr.base_ref = "main"
+        mock_pr.draft = False
+        mock_pr.merged = False
+        mock_pr.updated_at = datetime(2024, 1, 2)
+        mock_pr.html_url = "https://github.com/user/repo/pull/42"
+
+        mock_update.return_value = mock_pr
+
+        result = await github_tool.execute(
+            operation="update_pr",
+            owner="user",
+            repo="repo",
+            number=42,
+            title="Updated PR Title",
+            body="Updated description",
+        )
+
+        assert result.success is True
+        assert result.output["number"] == 42
+        assert result.output["title"] == "Updated PR Title"
+        assert "updated_fields" in result.metadata
+
+
+@pytest.mark.asyncio
+async def test_github_tool_update_pr_close(github_tool):
+    """Test GitHubTool update_pr operation - close PR."""
+    with patch.object(GitHubClient, "update_pull_request") as mock_update:
+        mock_pr = Mock()
+        mock_pr.number = 42
+        mock_pr.title = "Test PR"
+        mock_pr.body = "Test"
+        mock_pr.state = "closed"
+        mock_pr.head_ref = "feature"
+        mock_pr.base_ref = "main"
+        mock_pr.draft = False
+        mock_pr.merged = False
+        mock_pr.updated_at = datetime(2024, 1, 2)
+        mock_pr.html_url = "https://github.com/user/repo/pull/42"
+
+        mock_update.return_value = mock_pr
+
+        result = await github_tool.execute(
+            operation="update_pr",
+            owner="user",
+            repo="repo",
+            number=42,
+            state="closed",
+        )
+
+        assert result.success is True
+        assert result.output["state"] == "closed"
+
+
+@pytest.mark.asyncio
+async def test_github_tool_update_pr_invalid_state(github_tool):
+    """Test GitHubTool update_pr operation - invalid state."""
+    result = await github_tool.execute(
+        operation="update_pr",
+        owner="user",
+        repo="repo",
+        number=42,
+        state="invalid",
+    )
+
+    assert result.success is False
+    assert "Invalid state" in result.error
+
+
+@pytest.mark.asyncio
+async def test_github_tool_merge_pr_success(github_tool):
+    """Test GitHubTool merge_pr operation - successful merge."""
+    with patch.object(GitHubClient, "merge_pull_request") as mock_merge:
+        mock_merge.return_value = {
+            "sha": "abc123",
+            "merged": True,
+            "message": "Pull Request successfully merged",
+        }
+
+        result = await github_tool.execute(
+            operation="merge_pr",
+            owner="user",
+            repo="repo",
+            number=42,
+            merge_method="squash",
+            commit_title="Merge feature X",
+        )
+
+        assert result.success is True
+        assert result.output["merged"] is True
+        assert result.output["sha"] == "abc123"
+        assert result.output["merge_method"] == "squash"
+
+
+@pytest.mark.asyncio
+async def test_github_tool_merge_pr_invalid_method(github_tool):
+    """Test GitHubTool merge_pr operation - invalid merge method."""
+    result = await github_tool.execute(
+        operation="merge_pr",
+        owner="user",
+        repo="repo",
+        number=42,
+        merge_method="invalid",
+    )
+
+    assert result.success is False
+    assert "Invalid merge_method" in result.error
+
+
+@pytest.mark.asyncio
+async def test_github_tool_create_review_approve(github_tool):
+    """Test GitHubTool create_review operation - approve PR."""
+    with patch.object(GitHubClient, "create_review") as mock_review:
+        mock_review.return_value = {
+            "id": 123456,
+            "state": "APPROVED",
+            "body": "Looks good!",
+            "user": {"login": "reviewer"},
+            "submitted_at": "2024-01-02T00:00:00Z",
+            "html_url": "https://github.com/user/repo/pull/42#review-123456",
+        }
+
+        result = await github_tool.execute(
+            operation="create_review",
+            owner="user",
+            repo="repo",
+            number=42,
+            event="APPROVE",
+            body="Looks good!",
+        )
+
+        assert result.success is True
+        assert result.output["state"] == "APPROVED"
+        assert result.output["id"] == 123456
+
+
+@pytest.mark.asyncio
+async def test_github_tool_create_review_invalid_event(github_tool):
+    """Test GitHubTool create_review operation - invalid event."""
+    result = await github_tool.execute(
+        operation="create_review",
+        owner="user",
+        repo="repo",
+        number=42,
+        event="INVALID",
+        body="Test",
+    )
+
+    assert result.success is False
+    assert "Invalid event" in result.error
+
+
+@pytest.mark.asyncio
+async def test_github_tool_create_review_missing_body(github_tool):
+    """Test GitHubTool create_review operation - missing body."""
+    result = await github_tool.execute(
+        operation="create_review",
+        owner="user",
+        repo="repo",
+        number=42,
+        event="APPROVE",
+    )
+
+    assert result.success is False
+    assert "'body' is required" in result.error
+
+
+@pytest.mark.asyncio
+async def test_github_tool_list_reviews_success(github_tool):
+    """Test GitHubTool list_reviews operation - successful listing."""
+    with patch.object(GitHubClient, "list_reviews") as mock_list:
+        mock_list.return_value = [
+            {
+                "id": 123456,
+                "state": "APPROVED",
+                "body": "LGTM",
+                "user": {"login": "reviewer1"},
+                "submitted_at": "2024-01-02T00:00:00Z",
+                "html_url": "https://github.com/user/repo/pull/42#review-123456",
+            },
+            {
+                "id": 123457,
+                "state": "CHANGES_REQUESTED",
+                "body": "Please fix",
+                "user": {"login": "reviewer2"},
+                "submitted_at": "2024-01-03T00:00:00Z",
+                "html_url": "https://github.com/user/repo/pull/42#review-123457",
+            },
+        ]
+
+        result = await github_tool.execute(
+            operation="list_reviews",
+            owner="user",
+            repo="repo",
+            number=42,
+        )
+
+        assert result.success is True
+        assert result.output["count"] == 2
+        assert len(result.output["reviews"]) == 2
+        assert result.output["reviews"][0]["state"] == "APPROVED"
+        assert result.output["reviews"][1]["state"] == "CHANGES_REQUESTED"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

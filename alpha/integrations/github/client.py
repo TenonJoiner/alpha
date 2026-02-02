@@ -634,6 +634,231 @@ class GitHubClient:
         data = self._make_request("POST", endpoint, json_data=json_data)
         return PullRequest.from_dict(data)
 
+    def update_pull_request(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        state: Optional[str] = None,
+        base: Optional[str] = None,
+    ) -> PullRequest:
+        """
+        Update an existing pull request.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            title: New PR title (optional)
+            body: New PR body/description (optional)
+            state: New PR state - 'open' or 'closed' (optional)
+            base: New base branch (optional)
+
+        Returns:
+            Updated PullRequest object
+
+        Raises:
+            GitHubValidationError: If invalid parameters provided
+            GitHubNotFoundError: If PR not found
+            GitHubPermissionError: If no permission to update
+
+        Example:
+            # Update PR title and body
+            client.update_pull_request("owner", "repo", 42,
+                                      title="New Title",
+                                      body="Updated description")
+
+            # Close PR
+            client.update_pull_request("owner", "repo", 42, state="closed")
+        """
+        # Validate state parameter
+        if state and state not in ["open", "closed"]:
+            raise GitHubValidationError(
+                f"Invalid state '{state}'. Must be 'open' or 'closed'."
+            )
+
+        endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}"
+        json_data = {}
+
+        # Only include provided parameters
+        if title is not None:
+            json_data["title"] = title
+        if body is not None:
+            json_data["body"] = body
+        if state is not None:
+            json_data["state"] = state
+        if base is not None:
+            json_data["base"] = base
+
+        if not json_data:
+            raise GitHubValidationError(
+                "At least one parameter (title, body, state, or base) must be provided"
+            )
+
+        data = self._make_request("PATCH", endpoint, json_data=json_data)
+        return PullRequest.from_dict(data)
+
+    def merge_pull_request(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        commit_title: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        merge_method: str = "merge",
+    ) -> Dict[str, Any]:
+        """
+        Merge a pull request.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            commit_title: Title for merge commit (optional, uses PR title if not provided)
+            commit_message: Extra detail for merge commit (optional)
+            merge_method: Merge method - 'merge', 'squash', or 'rebase' (default: 'merge')
+
+        Returns:
+            Dict with merge result containing:
+                - sha: SHA of merge commit
+                - merged: Boolean indicating success
+                - message: Status message
+
+        Raises:
+            GitHubValidationError: If invalid merge_method or PR not mergeable
+            GitHubNotFoundError: If PR not found
+            GitHubPermissionError: If no permission to merge
+
+        Example:
+            result = client.merge_pull_request("owner", "repo", 42,
+                                              commit_title="Merge feature X",
+                                              merge_method="squash")
+            if result["merged"]:
+                print(f"Merged! Commit SHA: {result['sha']}")
+        """
+        # Validate merge method
+        valid_methods = ["merge", "squash", "rebase"]
+        if merge_method not in valid_methods:
+            raise GitHubValidationError(
+                f"Invalid merge_method '{merge_method}'. Must be one of: {', '.join(valid_methods)}"
+            )
+
+        endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/merge"
+        json_data = {"merge_method": merge_method}
+
+        if commit_title:
+            json_data["commit_title"] = commit_title
+        if commit_message:
+            json_data["commit_message"] = commit_message
+
+        data = self._make_request("PUT", endpoint, json_data=json_data)
+        return data
+
+    def create_review(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        event: str,
+        body: Optional[str] = None,
+        comments: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a review on a pull request.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            event: Review action - 'APPROVE', 'REQUEST_CHANGES', or 'COMMENT'
+            body: Review summary comment (optional for COMMENT, required for APPROVE/REQUEST_CHANGES)
+            comments: List of inline code review comments (optional)
+                Each comment should have:
+                - path: File path
+                - position: Line position (deprecated, use line)
+                - line: Line number in the diff
+                - side: 'LEFT' or 'RIGHT' (which side of diff)
+                - body: Comment text
+
+        Returns:
+            Dict with review details
+
+        Raises:
+            GitHubValidationError: If invalid event type or missing required body
+            GitHubNotFoundError: If PR not found
+            GitHubPermissionError: If no permission to review
+
+        Example:
+            # Approve PR
+            client.create_review("owner", "repo", 42,
+                               event="APPROVE",
+                               body="Looks good!")
+
+            # Request changes with inline comments
+            client.create_review("owner", "repo", 42,
+                               event="REQUEST_CHANGES",
+                               body="Please address these issues",
+                               comments=[{
+                                   "path": "src/main.py",
+                                   "line": 10,
+                                   "side": "RIGHT",
+                                   "body": "This variable should be renamed"
+                               }])
+        """
+        # Validate event type
+        valid_events = ["APPROVE", "REQUEST_CHANGES", "COMMENT"]
+        if event not in valid_events:
+            raise GitHubValidationError(
+                f"Invalid event '{event}'. Must be one of: {', '.join(valid_events)}"
+            )
+
+        # Body is required for APPROVE and REQUEST_CHANGES
+        if event in ["APPROVE", "REQUEST_CHANGES"] and not body:
+            raise GitHubValidationError(
+                f"'body' is required when event is '{event}'"
+            )
+
+        endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/reviews"
+        json_data = {"event": event}
+
+        if body:
+            json_data["body"] = body
+        if comments:
+            json_data["comments"] = comments
+
+        data = self._make_request("POST", endpoint, json_data=json_data)
+        return data
+
+    def list_reviews(
+        self,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        max_pages: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """
+        List reviews on a pull request.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            pr_number: Pull request number
+            max_pages: Maximum pages to fetch
+
+        Returns:
+            List of review dictionaries
+
+        Example:
+            reviews = client.list_reviews("owner", "repo", 42)
+            for review in reviews:
+                print(f"{review['user']['login']}: {review['state']}")
+        """
+        endpoint = f"repos/{owner}/{repo}/pulls/{pr_number}/reviews"
+        reviews_data = self._paginate(endpoint, max_pages=max_pages)
+        return reviews_data
+
     # ===== Commit Operations =====
 
     def list_commits(
