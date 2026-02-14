@@ -1,0 +1,39 @@
+server:
+  name: cognitive-brain
+  version: 0.1.0
+  host: 0.0.0.0
+  port: 8000
+  log_level: info
+  workers: 1
+
+data_root: /data/knowledge-brains
+config_path: brain.yaml
+
+domains:
+  storage-architect:
+    name: 存储架构师
+    description: 企业存储架构设计知识，专注推理存储场景
+    data_path: storage-architect
+    enabled: true
+  
+  network-architect:
+    name: 网络架构师
+    description: 网络架构设计知识
+    data_path: network-architect
+    enabled: false
+  
+  ai-engineer:
+    name: AI工程师
+    description: AI 系统开发与部署知识
+    data_path: ai-engineer
+    enabled: false
+
+llm:
+  provider: claude
+  model: claude-3-sonnet-20240229
+  temperature: 0.7
+  max_tokens: 4096
+
+enable_learning: true
+enable_auto_index: true
+max_concurrent_learning: 3
